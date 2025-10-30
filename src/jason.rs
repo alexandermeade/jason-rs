@@ -4,6 +4,41 @@ use std::fs;
 use std::error;
 use std::collections::HashMap;
 
+fn split_arguments(s: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut start = 0;
+    let mut depth = 0;
+    let mut in_string = false;
+
+    for (i, &c) in s.chars().collect::<Vec<char>>().iter().enumerate() {
+        match c {
+            '"' => in_string = !in_string,
+            '[' | '{' if !in_string => depth += 1,
+            ']' | '}' if !in_string => depth -= 1,
+            ',' if depth == 0 && !in_string => {
+                let arg = s[start..i].trim();
+                if !arg.is_empty() {
+                    args.push(arg.to_string());
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+
+    // Add last argument
+    if start < s.len() {
+        let arg = s[start..].trim();
+        if !arg.is_empty() {
+            args.push(arg.to_string());
+        }
+    }
+
+    args
+}
+
+
+
 fn expand_json(mut src: String, input_args: Vec<String>) -> Result<String, Box<dyn error::Error>> {
     // Regex to match ...<...> pattern
     let re = Regex::new(r"<([^>]+)>").unwrap();
@@ -49,17 +84,15 @@ fn expand_json(mut src: String, input_args: Vec<String>) -> Result<String, Box<d
     let replaced = re.replace_all(&src, |caps: &regex::Captures| {
         let inner_content = &caps[1];
 
-        if inner_content.to_string().contains("|") {
-
-            let contents: Vec<String> = inner_content.split("|").map(|s| s.trim().to_string()).collect(); 
+        if inner_content.contains("|") {
+            let contents: Vec<String> = inner_content.split('|').map(|s| s.trim().to_string()).collect();
             let file = &contents[0].trim();
-            let arguments = contents[1].split(',').map(|s| s.trim().to_string()).collect();
+            let arguments = split_arguments(&contents[1]);
 
-            expand_json_from_file(file, arguments).expect("error").to_string()    
-
+            expand_json_from_file(file, arguments).expect("error").to_string()
         } else {
-            expand_json_from_file(&inner_content.trim(), vec![]).expect("error").to_string()    
-        }        
+            expand_json_from_file(&inner_content.trim(), vec![]).expect("error").to_string()
+        }
     });
 
     Ok(replaced.to_string())

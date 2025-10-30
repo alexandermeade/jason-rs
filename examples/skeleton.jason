@@ -1,7 +1,0 @@
-
-(name, health)
-{
-    "name": #name,
-    "health": #health 
-}
-

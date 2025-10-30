@@ -1,0 +1,7 @@
+
+//Person.jason
+
+(name, age) {
+    "name": #name,
+    "age": #age
+}

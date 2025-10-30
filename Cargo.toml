@@ -1,0 +1,25 @@
+[package]
+name = "jason"
+version = "0.1.0"
+edition = "2021"                
+authors = ["Alexander Meade <thisguys348@gmail.com>"]
+description = "A library for parsing Jason-like files into JSON, YAML, or TOML with support for inline file expansion."
+license = "Apache-2.0"
+repository = "https://github.com/alexandermeade/jason"
+readme = "README.md"
+keywords = ["json", "yaml", "toml", "parser", "config"]
+categories = ["encoding", "parser-implementations"]
+documentation = "https://docs.rs/jason"
+
+[lib]
+name = "jason"
+path = "src/lib.rs"
+
+[dependencies]
+regex = "1.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+json5 = "0.3"
+serde_yaml = "0.9"
+toml = "0.9"
+

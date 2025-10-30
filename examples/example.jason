@@ -1,0 +1,42 @@
+{
+  "enemies": [
+    <./examples/nestedX.jason | "enemy0", 10>,
+    <./examples/nestedX.jason | "enemy1", 12>,
+    <./examples/nestedX.jason | "enemy2", 15>,
+    <./examples/nestedX.jason | "enemy3", 20>,
+    <./examples/nestedX.jason | "enemy4", 18>,
+    <./examples/nestedX.jason | "enemy5", 22>,
+    <./examples/nestedX.jason | "enemy6", 25>,
+    <./examples/nestedX.jason | "enemy7", 30>,
+    <./examples/nestedX.jason | "enemy8", 28>,
+    <./examples/nestedX.jason | "enemy9", 35>
+  ],
+
+  "npcs": [
+    <./examples/nestedX.jason | "shopkeeper", 100>,
+    <./examples/nestedX.jason | "blacksmith", 120>,
+    <./examples/nestedX.jason | "healer", 80>,
+    <./examples/nestedX.jason | "wizard", 150>
+  ],
+
+  "loot": [
+    <./examples/nestedX.jason | "coin", 0>,
+    <./examples/nestedX.jason | "magic ring", 0>,
+    <./examples/nestedX.jason | "elixir", 0>,
+    <./examples/nestedX.jason | "dragon armor", 0>
+  ],
+
+  "levels": [
+    <./examples/nestedX.jason | "level1", 1>,
+    <./examples/nestedX.jason | "level2", 2>,
+    <./examples/nestedX.jason | "level3", 3>
+  ],
+
+  "settings": [
+    <./examples/nestedX.jason | "max_players", 4>,
+    <./examples/nestedX.jason | "difficulty", "normal">,
+    <./examples/nestedX.jason | "friendly_fire", false>,
+    <./examples/nestedX.jason | "spawn_rate", 1.5>
+  ]
+}
+

@@ -5,86 +5,17 @@ use std::error;
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
+use crate::lexer;
+use crate::token;
 
 
 type FileChain =  Rc<RefCell<Vec<String>>>;
 
-fn print_file_chain(file_chain_rc: FileChain) -> String {
-    let file_chain = file_chain_rc.borrow();
-    
-    file_chain.join(" -> ") + " (HEAD)"
-}
 
-fn split_arguments(s: &str) -> Vec<String> {
-    let mut args = Vec::new();
-    let mut start = 0;
-
-    let mut depth_square = 0;
-    let mut depth_curly = 0;
-
-    let mut in_string = false;
-    let mut escaped = false;
-
-    let mut in_angle = false;
-    let mut in_angle_string = false;
-
-    for (i, c) in s.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                in_string = false;
-            }
-        } else if in_angle {
-            if in_angle_string {
-                if escaped {
-                    escaped = false;
-                } else if c == '\\' {
-                    escaped = true;
-                } else if c == '"' {
-                    in_angle_string = false;
-                }
-            } else {
-                match c {
-                    '"' => in_angle_string = true,
-                    '>' => in_angle = false, // end of angle block
-                    _ => {}
-                }
-            }
-        } else {
-            match c {
-                '"' => in_string = true,
-                '[' => depth_square += 1,
-                ']' => depth_square -= 1,
-                '{' => depth_curly += 1,
-                '}' => depth_curly -= 1,
-                '<' => in_angle = true,
-                ',' if depth_square == 0 && depth_curly == 0 && !in_angle => {
-                    let arg = s[start..i].trim();
-                    if !arg.is_empty() {
-                        args.push(arg.to_string());
-                    }
-                    start = i + 1;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    // Add last argument
-    if start < s.len() {
-        let arg = s[start..].trim();
-        if !arg.is_empty() {
-            args.push(arg.to_string());
-        }
-    }
-
-    args
-}
 
 fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChain) -> Result<String, Box<dyn error::Error>> {
+    println!("result: {:#?}", lexer::Lexer::start(src));    
+    /*
     // Regex to match ...<...> pattern
     let re = Regex::new(r"<([^>]+)>").unwrap();
     
@@ -133,10 +64,8 @@ fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChai
             let file = &contents[0].trim();
             let arguments = split_arguments(&contents[1]);
             println!("arguments3: {:?}", arguments);
-            expand_json_from_file(file, arguments, file_chain_rc.clone()).expect(
-                &format!("[ERROR] head file: {}", print_file_chain(file_chain_rc.clone())) 
-            )
-                .to_string()
+
+            expand_json_from_file(file, arguments.expect(&print_file_chain(file_chain_rc.clone())), file_chain_rc.clone()).expect(&print_file_chain(file_chain_rc.clone())).to_string()
         } else {
             expand_json_from_file(&inner_content.trim(), vec![], file_chain_rc.clone())
                 .expect(&format!("[ERROR] head file: {}", print_file_chain(file_chain_rc.clone()))).to_string()
@@ -145,6 +74,8 @@ fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChai
     });
 
     Ok(replaced.to_string())
+    */
+    Ok(String::from(""))
 }
 
 fn expand_json_from_file(file_path: &str, input_args: Vec<String>, file_chain_rc: FileChain) -> Result<String, Box<dyn error::Error>> {
@@ -207,7 +138,9 @@ fn prettify_json(input: &str) -> Result<String, Box<dyn std::error::Error>> {
 /// ```
 pub fn jason_to_json(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
     let src = expand_json_from_file(file_path, vec![], Rc::new(RefCell::new(vec![]))).unwrap();
-    prettify_json(&src)
+    Ok(src.to_string())
+    //prettify_json(&src)
+    
 }
 
 

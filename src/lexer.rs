@@ -108,14 +108,18 @@ impl Lexer {
         if start < 0 || self.index >= self.contents.len() {
             return self.new_token(TokenType::ERR(format!("INCORRECT SET BOUNDS FOR NUMBER/FLOAT LIT DEF at {} {}", row, colmn)), format!("NUMBER/FLOAT LIT def ERROR incorrect bounds"));
         }
-        let string_contents = &self.contents[start.. self.index];
+
+        let index = self.index;
+                
+        self.back();
+
         return self.new_token(
             if is_float {
-                TokenType::FloatLiteral(format!("{}", string_contents))
+                TokenType::FloatLiteral(format!("{}", &self.contents[start.. index]))
             }else {
-                TokenType::NumberLiteral(format!("{}", string_contents))
+                TokenType::NumberLiteral(format!("{}", &self.contents[start.. index]))
             }, 
-            format!("{}", string_contents)
+            format!("{}",&self.contents[start.. index])
         );
 
     }
@@ -243,6 +247,16 @@ impl Lexer {
                 self.next();
                 return self.lex();
             },
+            '(' => {
+                let mut toks: Vec<Token> = self.collect_toks_between(TokenType::OpenParen, TokenType::ClosedParen);
+
+
+                let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
+                    .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
+                    .collect();
+
+                return self.new_token(TokenType::List(args), format!("Tuple"));
+            },
             '[' => {
                 let mut toks: Vec<Token> = self.collect_toks_between(TokenType::OpenBracket, TokenType::ClosedBracket);
 
@@ -256,7 +270,7 @@ impl Lexer {
             '{' => {
                 let mut toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
 
-                let mut args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::NewLine)
+                let mut args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                     .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
                     .collect();                
                 args.retain(|vec| !vec.is_empty());
@@ -289,10 +303,10 @@ impl Lexer {
                         .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
                         .collect();
 
-                    return self.new_token(TokenType::Template(sides[0].clone(), args), format!("List"));
+                    return self.new_token(TokenType::Template(sides[0].clone(), args), format!("Template"));
                 }
 
-                return self.new_token(TokenType::List(sides), format!("List"));
+                return self.new_token(TokenType::Template(sides[0].clone(), vec![]), format!("Template"));
             },
             ')' => return self.new_token(TokenType::ClosedParen, format!(")")),
             ']' => return self.new_token(TokenType::ClosedBracket, format!("]")),
@@ -321,7 +335,7 @@ impl Lexer {
                         },
                         '{' => {
                             let mut toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
-                            let mut args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::NewLine)
+                            let mut args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                                 .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
                                 .collect();                                           
                             args.retain(|vec| !vec.is_empty());
@@ -396,11 +410,13 @@ impl Lexer {
         while lexer.curr_char != '\0' {
             lexer.skip_whitespace();
             let tok = lexer.lex();
-            lexer.tokens.push(tok);
+            if tok.token_type != TokenType::NewLine {
+                lexer.tokens.push(tok);
+            }
             lexer.next();
         } 
         
-        lexer.tokens.push(token::Token::new(TokenType::EOT, "EOT".to_string(), lexer.row + 1, lexer.colmn + 1));
+        //lexer.tokens.push(token::Token::new(TokenType::EOT, "EOT".to_string(), lexer.row + 1, lexer.colmn + 1));
         
         return lexer.tokens;
     }

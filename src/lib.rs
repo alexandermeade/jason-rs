@@ -51,5 +51,7 @@
 pub mod jason;
 mod lexer; 
 mod token;
+mod parser;
+
 pub use jason::*;
 

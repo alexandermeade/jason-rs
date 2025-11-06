@@ -173,13 +173,16 @@ impl Token {
     }
     
     pub fn into_path(toks: Vec<Token>) -> Token {
-        let result:String = "".to_string();
+        let mut result:String = "".to_string();
         let row = toks[0].row;
         let colmn = toks[0].colmn;
         for tok in toks {
-            result += (tok.plain());
+            result.push_str(&tok.plain());
         }
-        return Token::new(TokenType::Path(tok.plain()), tok.plain(), row, colmn);
+        return Token::new(TokenType::Path(result.clone()), result, row, colmn);
+    }
+    pub fn EOT() -> Self {
+        Self::new(TokenType::EOT, "EOT".to_string(), 1, 1)
     }
 
     pub fn plain(&self) -> String {

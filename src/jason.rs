@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::lexer;
+use crate::parser;
 use crate::token;
 
 
@@ -14,7 +15,11 @@ type FileChain =  Rc<RefCell<Vec<String>>>;
 
 
 fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChain) -> Result<String, Box<dyn error::Error>> {
-    println!("result: {:#?}", lexer::Lexer::start(src));    
+    let toks = lexer::Lexer::start(src);
+
+    println!("toks: {:#?}", toks);    
+    let nodes = parser::Parser::start(toks);
+    println!("result: {:#?}", nodes);    
     /*
     // Regex to match ...<...> pattern
     let re = Regex::new(r"<([^>]+)>").unwrap();

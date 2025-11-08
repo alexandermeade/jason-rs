@@ -52,6 +52,8 @@ pub mod jason;
 mod lexer; 
 mod token;
 mod parser;
+mod context;
+mod json_compiler;
 
 pub use jason::*;
 

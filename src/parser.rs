@@ -47,9 +47,16 @@ impl Parser {
         let token = self.current().cloned().unwrap_or(Token::new(TokenType::EOT, "EOT".to_string(), 1, 1));
         
         return match token.token_type {
-            TokenType::ID | TokenType::NumberType=> {
+            TokenType::ID               | 
+            TokenType::NumberType       | 
+            TokenType::List(_)          | 
+            TokenType::StringLiteral(_) => {
                 self.next();
                 ASTNode::new(token) 
+            },
+            TokenType::FnCall(_) => {
+                self.next();
+                ASTNode::new(token).children(None, Some(Box::new(self.expr())))             
             },
             _ => { self.next(); ASTNode::new(token)},
         }
@@ -65,7 +72,7 @@ impl Parser {
 
         while let Some(token) = self.current().cloned() {
             match token.token_type {
-                TokenType::Colon => {
+                TokenType::Colon | TokenType::From => {
                     self.next(); // consume ':'
                     let right = self.term(); // parse right-hand side of ':'
 

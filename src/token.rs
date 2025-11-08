@@ -9,6 +9,7 @@ pub enum TokenType {
     StringLiteral(String),
     NumberLiteral(String),
     FloatLiteral(String),
+    Import(Args),
     FnCall(Args),
     Index(Args),
     StructDef(Box<Token>, Args),
@@ -49,6 +50,7 @@ pub enum TokenType {
     LessThan,
     GreaterThan,
     // keywords
+    From,
     FN,
     Let,
     AS,
@@ -64,8 +66,10 @@ pub enum TokenType {
 }
 
 impl TokenType {
+    
     pub fn find_keyword(content:&str) -> TokenType {
         match content {
+            "from" => TokenType::From,
             "fn" => TokenType::FN, 
             "let" => TokenType::Let,
             "as" => TokenType::AS,
@@ -171,7 +175,8 @@ impl Token {
             colmn
         }
     }
-    
+    pub fn find_fn_keyword(self) {
+    }   
     pub fn into_path(toks: Vec<Token>) -> Token {
         let mut result:String = "".to_string();
         let row = toks[0].row;

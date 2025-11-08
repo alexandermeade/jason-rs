@@ -323,8 +323,7 @@ impl Lexer {
                             let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                                 .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
                                 .collect();                                            
-
-                            return self.new_token(TokenType::FnCall(args), format!("Fn Call of [{}]", id.plain()));                        
+                            return self.new_token(TokenType::FnCall(args), format!("{}", id.plain()));                        
                         },
                         '[' => {
                             let mut toks: Vec<Token> = self.collect_toks_between(TokenType::OpenBracket, TokenType::ClosedBracket);

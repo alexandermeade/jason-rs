@@ -12,8 +12,6 @@ use crate::token;
 
 type FileChain =  Rc<RefCell<Vec<String>>>;
 
-
-
 fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChain) -> Result<String, Box<dyn error::Error>> {
     let toks = lexer::Lexer::start(src);
 

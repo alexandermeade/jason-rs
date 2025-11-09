@@ -5,6 +5,7 @@ use std::error;
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
+use crate::context::Context;
 use crate::lexer;
 use crate::parser;
 use crate::token;
@@ -18,16 +19,24 @@ fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChai
     println!("toks: {:#?}", toks);    
     let nodes = parser::Parser::start(toks);
     println!("result: {:#?}", nodes);   
-    
+        
+
     println!("result -----------");
 
-    for node in nodes {
+    let mut context = Context::new();
 
-        println!("{}", &node.to_json());
-        println!("{}", serde_json::to_string_pretty(&node.to_json()).unwrap());
+    
+
+    for node in nodes {
+        println!("{:?}", context.to_json(&node));
     }
     
-    println!("over");
+    println!("end result -----------");
+    
+
+    println!("{:#?}", context);
+
+    println!("-----\n program ended successfully");
     Ok(String::from(""))
 }
 

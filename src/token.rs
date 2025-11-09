@@ -1,5 +1,8 @@
 //this token defintion is borrowed from my nyx language project
 
+use crate::parser::Parser;
+use crate::astnode::ASTNode;
+
 pub type Args = Vec<Vec<Token>>;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -10,8 +13,11 @@ pub enum TokenType {
     NumberLiteral(String),
     FloatLiteral(String),
     Import(Args),
+    Export(Args),
     FnCall(Args),
     Index(Args),
+    // input args, block args
+    TemplateDef(Args, Args),
     StructDef(Box<Token>, Args),
     Block(Args),
     List(Args),
@@ -54,6 +60,7 @@ pub enum TokenType {
     FN,
     Let,
     AS,
+    Out,
     Const,
     Type,
     StringType,
@@ -81,59 +88,12 @@ impl TokenType {
             "type" => TokenType::Type,
             "embed" => TokenType::Embed,
             "return" => TokenType::Return,
+            "out" => TokenType::Out,
             "use" => TokenType::Use,
             _ => TokenType::ID
         }
     }
-    
-    pub fn as_str(&self) -> Option<&'static str> {
-        match self {
-            // Special characters
-            TokenType::Colon => Some(":"),
-            TokenType::Dot => Some("."),
-            TokenType::Comma => Some(","),
-            TokenType::OpenParen => Some("("),
-            TokenType::ClosedParen => Some(")"),
-            TokenType::OpenBracket => Some("["),
-            TokenType::ClosedBracket => Some("]"),
-            TokenType::OpenCurly => Some("{"),
-            TokenType::ClosedCurly => Some("}"),
 
-            // Math symbols
-            TokenType::Equals => Some("="),
-            TokenType::Plus => Some("+"),
-            TokenType::Minus => Some("-"),
-            TokenType::Mult => Some("*"),
-            TokenType::Divide => Some("/"),
-            TokenType::Mod => Some("%"),
-
-            // Logic symbols
-            TokenType::LessThan => Some("<"),
-            TokenType::GreaterThan => Some(">"),
-
-            // Keywords
-            TokenType::FN => Some("fn"),
-            TokenType::Let => Some("let"),
-            TokenType::AS => Some("as"),
-            TokenType::Const => Some("const"),
-            TokenType::Type => Some("type"),
-            TokenType::StringType => Some("string"),
-            TokenType::NumberType => Some("number"),
-            TokenType::FloatType => Some("float"),
-            TokenType::CharType => Some("char"),
-            TokenType::Embed => Some("embed"),
-            TokenType::Use => Some("use"),
-            TokenType::Empty => Some("empty"),
-
-            // Special / control tokens
-            TokenType::StartComment => Some("//"),
-            TokenType::EndComment => Some("*/"),
-            TokenType::NewLine => Some("\n"),
-            TokenType::EOF => Some("<EOF>"),
-            TokenType::EOT => Some("<EOT>"),
-            _ => None
-    }
-}
     pub fn is_err(&self) -> bool {
         return match self {
             TokenType::ERR(content) => true,
@@ -156,6 +116,11 @@ impl TokenType {
                *self == TokenType::CharType   ||
                matches!(*self, TokenType::InnerType(_, _)); 
     }
+    //NOTE: this function is terrible and remove it on release
+    pub fn name(&self) -> String {
+        let s = format!("{:?}", self);
+        s.split('(').next().unwrap().to_string()
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -175,7 +140,22 @@ impl Token {
             colmn
         }
     }
-    pub fn find_fn_keyword(self) {
+
+    pub fn find_fn_keyword(self) -> Self {
+        let row = self.row;
+        let colmn = self.colmn;
+        let name:&str = &(self.plain().clone());
+        let token_type = self.token_type.clone();
+
+        if let TokenType::FnCall(args) = token_type {
+            return match name {
+                "import" => Token::new(TokenType::Import(args), name.to_string(), row, colmn),
+                "export" => Token::new(TokenType::Export(args), name.to_string(), row, colmn),
+                _ => self,
+            } 
+        }
+
+        return self;
     }   
     pub fn into_path(toks: Vec<Token>) -> Token {
         let mut result:String = "".to_string();
@@ -186,6 +166,13 @@ impl Token {
         }
         return Token::new(TokenType::Path(result.clone()), result, row, colmn);
     }
+
+    pub fn to_json(&self) -> String {
+        match self.token_type {
+            _ => self.plain()
+        }
+    }
+
     pub fn EOT() -> Self {
         Self::new(TokenType::EOT, "EOT".to_string(), 1, 1)
     }
@@ -209,6 +196,26 @@ impl Token {
             row: 0,
             colmn: 0
         }
+    }
+}
+
+pub trait ArgsToNode {
+    fn to_nodes(&self) -> Vec<ASTNode>;
+}
+
+impl ArgsToNode for Args {
+    fn to_nodes(&self) -> Vec<ASTNode> {
+        self.iter()
+            .flat_map(|tokens| {
+                let filtered: Vec<Token> = tokens
+                    .iter()
+                    .filter(|token| token.token_type != TokenType::NewLine)
+                    .cloned()
+                    .collect();
+
+                Parser::start(filtered)
+            })
+            .collect::<Vec<ASTNode>>()
     }
 }
 

@@ -17,67 +17,17 @@ fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChai
 
     println!("toks: {:#?}", toks);    
     let nodes = parser::Parser::start(toks);
-    println!("result: {:#?}", nodes);    
-    /*
-    // Regex to match ...<...> pattern
-    let re = Regex::new(r"<([^>]+)>").unwrap();
+    println!("result: {:#?}", nodes);   
     
-    let re_arguments = Regex::new(r"(?s)\((.*?)\)\s*([\{\[])").unwrap();
+    println!("result -----------");
+
+    for node in nodes {
+
+        println!("{}", &node.to_json());
+        println!("{}", serde_json::to_string_pretty(&node.to_json()).unwrap());
+    }
     
-    let args:Vec<String> = {
-        if let Some(caps) = re_arguments.captures(&src.clone()) {
-            let args = &caps[1]; // "name, health"
-            let delim = &caps[2]; // '{' or '['
-            // Remove parentheses from src if needed
-            let stripped = re_arguments.replace(&src, delim);
-            src = stripped.into();
-
-            args
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect()
-        } else {
-            Vec::new()
-        }
-    };
-
-    let mut variable_map: HashMap<String, String> = HashMap::new();
-    
-    if input_args.len() != args.len() {
-        println!("input_args: {} , args: {}\n\n", input_args.len(), args.len());
-        return Err(format!("input arguments don't match actual arguments\n input_args: {:?} \n  args: {:?}", input_args.join(","), args.join(",")).into());
-    }
-
-    for (i, arg) in args.into_iter().enumerate() {
-        if arg.trim() == "" {
-            continue;
-        }
-        variable_map.insert(arg, input_args[i].clone());
-    }
-
-    for key in variable_map.keys() {
-        src = src.replace(&format!("#{}", key), variable_map.get(key).unwrap());
-    }
-
-    let replaced = re.replace_all(&src, |caps: &regex::Captures| {
-        let inner_content = &caps[1];
-
-        if inner_content.contains("|") {
-            let contents: Vec<String> = inner_content.splitn(2, '|').map(|s| s.trim().to_string()).collect();
-            let file = &contents[0].trim();
-            let arguments = split_arguments(&contents[1]);
-            println!("arguments3: {:?}", arguments);
-
-            expand_json_from_file(file, arguments.expect(&print_file_chain(file_chain_rc.clone())), file_chain_rc.clone()).expect(&print_file_chain(file_chain_rc.clone())).to_string()
-        } else {
-            expand_json_from_file(&inner_content.trim(), vec![], file_chain_rc.clone())
-                .expect(&format!("[ERROR] head file: {}", print_file_chain(file_chain_rc.clone()))).to_string()
-
-        }
-    });
-
-    Ok(replaced.to_string())
-    */
+    println!("over");
     Ok(String::from(""))
 }
 

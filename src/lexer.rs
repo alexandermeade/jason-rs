@@ -322,8 +322,19 @@ impl Lexer {
                             let mut toks: Vec<Token> = self.collect_toks_between(TokenType::OpenParen, TokenType::ClosedParen);
                             let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                                 .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
-                                .collect();                                            
-                            return self.new_token(TokenType::FnCall(args), format!("{}", id.plain()));                        
+                                .collect();
+                            self.next();
+                            self.skip_whitespace(); 
+                            if self.curr_char == '{' {
+                                let mut inner_toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
+                                let mut inner_args: Vec<Vec<Token>> = inner_toks.split(|tok| tok.token_type == TokenType::Comma)
+                                    .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
+                                    .collect();                                           
+                                inner_args.retain(|vec| !vec.is_empty());
+                                return self.new_token(TokenType::TemplateDef(args, inner_args), format!("{}", id.plain()));                        
+                            }
+                            self.back();
+                            return self.new_token(TokenType::FnCall(args), format!("{}", id.plain())).find_fn_keyword();                        
                         },
                         '[' => {
                             let mut toks: Vec<Token> = self.collect_toks_between(TokenType::OpenBracket, TokenType::ClosedBracket);
@@ -338,7 +349,7 @@ impl Lexer {
                                 .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
                                 .collect();                                           
                             args.retain(|vec| !vec.is_empty());
-                            return self.new_token(TokenType::StructDef(Box::new(id.clone()), args), format!("Struct def of [{}]", id.plain()));                        
+                            return self.new_token(TokenType::TemplateDef(vec![], args), format!("{}", id.plain()));                        
                         },
                          _ => {}
                     }

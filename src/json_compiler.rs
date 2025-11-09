@@ -1,6 +1,8 @@
-use crate::parser::ASTNode;
-use crate::context::{Context, GlobalContext}; 
+use crate::astnode::ASTNode;
+use crate::context::{Context}; 
 
-pub fn ast_to_json(nodes: Vec<ASTNode>) -> GlobalContext {
-    GlobalContext::new()            
+pub fn ast_to_context(nodes: Vec<ASTNode>) -> Context {
+    Context::new()
 }
+
+

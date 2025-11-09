@@ -1,31 +1,9 @@
-
 use crate::token::Token;
 use crate::token::TokenType;
-
-type ChildNode = Option<Box<ASTNode>>;
-
-#[derive(Debug, Clone)]
-pub struct ASTNode {
-    left: ChildNode,
-    right: ChildNode,
-    token: Token
-}
-
-impl ASTNode {
-    pub fn new(token: Token) -> Self {
-        ASTNode { left: None, right: None, token }
-    }
-
-    pub fn children(mut self, left: ChildNode, right: ChildNode) -> Self{
-        self.left = left;
-        self.right = right;
-        self
-    }
-
-    pub fn EOT() -> Self {
-        Self { left: None, right: None, token: Token::EOT() }
-    }
-}
+use crate::token::ArgsToNode;
+use serde_json::{Value, Number};
+use crate::astnode::ASTNode;
+use serde_json::Map;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -50,11 +28,12 @@ impl Parser {
             TokenType::ID               | 
             TokenType::NumberType       | 
             TokenType::List(_)          | 
+            TokenType::FnCall(_)        |
             TokenType::StringLiteral(_) => {
                 self.next();
                 ASTNode::new(token) 
             },
-            TokenType::FnCall(_) => {
+            TokenType::Out => {
                 self.next();
                 ASTNode::new(token).children(None, Some(Box::new(self.expr())))             
             },
@@ -72,18 +51,20 @@ impl Parser {
 
         while let Some(token) = self.current().cloned() {
             match token.token_type {
-                TokenType::Colon | TokenType::From => {
+                TokenType::Colon  | 
+                TokenType::From   |
+                TokenType::AS     |
+                TokenType::Equals => {
                     self.next(); // consume ':'
                     let right = self.term(); // parse right-hand side of ':'
 
                     // build new AST node where ':' is parent
                     node = ASTNode::new(token)
                         .children(Some(Box::new(node)), Some(Box::new(right)));
-                }
+                },
                 _ => break,
             }
         }
-
         node
     }
 

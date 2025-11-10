@@ -96,7 +96,7 @@ impl TokenType {
 
     pub fn is_err(&self) -> bool {
         return match self {
-            TokenType::ERR(content) => true,
+            TokenType::ERR(_) => true,
             _ => false,
         }
     }
@@ -171,10 +171,6 @@ impl Token {
         match self.token_type {
             _ => self.plain()
         }
-    }
-
-    pub fn EOT() -> Self {
-        Self::new(TokenType::EOT, "EOT".to_string(), 1, 1)
     }
 
     pub fn plain(&self) -> String {

@@ -7,14 +7,13 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Template {
-    name: String,
     arguments: Vec<String>,
     block: token::Args,
 }
 
 impl Template { 
-    pub fn new(name: String, arguments: Vec<String>, block: token::Args) -> Self {
-        Self { name, arguments, block }
+    pub fn new(arguments: Vec<String>, block: token::Args) -> Self {
+        Self { arguments, block }
     }
 
     pub fn arguments_count(&self) -> usize {

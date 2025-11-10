@@ -103,11 +103,11 @@ impl Context {
                 if args.len() > 0 {
                     let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
                 
-                    self.templates.insert(node.token.plain(), Template::new(node.token.plain(), args, block.clone()));
+                    self.templates.insert(node.token.plain(), Template::new(args, block.clone()));
                     return None;
                 }
 
-                self.templates.insert(node.token.plain(), Template::new(node.token.plain(), Vec::new(), block.clone()));
+                self.templates.insert(node.token.plain(), Template::new(Vec::new(), block.clone()));
                 return None;
             },
             TokenType::FnCall(args) => {

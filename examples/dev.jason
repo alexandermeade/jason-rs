@@ -1,0 +1,8 @@
+
+Dev(name, project, money) {
+    name: name,
+    project: project,
+    money: money,
+}
+// invokes the template and fills in the variables with the passed in arguments
+out Dev("alex", "jason-rs", 0) 

@@ -1,0 +1,9 @@
+// a variable that holds an object of those fields
+alex = {
+    name: "Alex",
+    project: "jason-rs",
+    money: 0,
+}
+
+//what gets exported at the top level
+out alex 

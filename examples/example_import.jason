@@ -1,0 +1,3 @@
+import(Dev) from "./examples/dev.jason"
+
+out Dev("alex", "jason-rs", 0) 

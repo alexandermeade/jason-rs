@@ -4,7 +4,7 @@
 [![Docs](https://docs.rs/jason-rs/badge.svg)](https://docs.rs/jason-rs)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-**jason** is a lightweight JSON templating tool that transforms reusable `.jason` template files into standard JSON. Build modular and composable JSON structures with parameter support and file inclusion.
+**jason** is a lightweight JSON templating tool that transforms reusable `.jason` files into standard JSON. Build modular and composable JSON structures with parameter support and file inclusion.
 
 ## ✨ Features
 
@@ -19,7 +19,7 @@ Add `jason-rs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-jason-rs = "0.1"
+jason-rs = "0.2.5"
 ```
 
 Parse a Jason file:
@@ -36,84 +36,66 @@ fn main() {
 
 ##  Example
 
+### Jason File
+```jason
+// a variable that holds an object of those fields
+alex = {
+    name: "Alex",
+    project: "jason-rs",
+    money: 0,
+}
+
+//what gets exported at the top level
+out alex 
+```
+
 ### Jason Templates
+```jsaon
 
-**Person.jason** - A reusable person template
+Dev(name, project, money) {
+    name: name,
+    project: project,
+    money: money,
+}
+// invokes the template and fills in the variables with the passed in arguments
+out Dev("alex", "jason-rs", 0) 
+```
+
+## importing
+
+**Dev.jason** - A file containg the dev template
 ```jason
-(name, age) {
-    "name": #name,
-    "age": #age
+Dev(name, project, money) {
+    name: name,
+    project: project,
+    money: money,
 }
 ```
 
-**Studio.jason** - A static studio object
+**main.jason** - The top level file being compiled
 ```jason
-{
-    "name": "GameInc",
-    "ceo": "Dave Something"
-}
+import(Dev) from "./Person.jason"
+
+out Dev("alex", "jason-rs", 0) 
 ```
 
-**Team.jason** - Composing multiple templates
-```jason
-(project) {
-    "studio": <./Studio.jason>,
-    "project": #project,
-    "workers": [
-        <./Person.jason | "jay", 12>,
-        <./Person.jason | "mark", 14>,
-        <./Person.jason | "lee", 15>
-    ]
-}
-```
-
-**Page.jason** - The head of the composition.
-```jason
-{
-    "team": <./Team.jason | "Mario">
-}
-```
-
-### Generated JSON
-
-```json
-{
-  "team": {
-    "project": "Mario",
-    "studio": {
-      "name": "GameInc",
-      "ceo": "Dave Something"
-    },
-    "workers": [
-      {
-        "name": "jay",
-        "age": 12
-      },
-      {
-        "name": "mark",
-        "age": 14
-      },
-      {
-        "name": "lee",
-        "age": 15
-      }
-    ]
-  }
-}
-```
+note: this will not import the context around DEV so variables will be ignored unless imported as well. 
+this warning will be patched in a later version with groups.
 
 ## Syntax Overview
 
 | Syntax | Description |
 |--------|-------------|
-| `(param1, param2)` | Define template parameters |
-| `#param` | Reference a parameter value |
-| `<./File.jason>` | Include another Jason file |
-| `<./File.jason \| arg1, arg2>` | Include with arguments |
+| `name(arg1, arg2, ...) {...}` | Defines a template name |
+| `name() {...}` | Defines a template name  |
+| `name {...}` | Defines a template name |
+| `name = ...` | Defines a variable name  |
+| `name(...)` | invokes a template |
+| `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |
 
 
 
-Parses a `.jason` file at the given path and returns the resulting JSON as a `String`.
+Parses a `.jason` file at the given path and returns a serde_json value object which can then be converted to structs
 
 ##  License
 

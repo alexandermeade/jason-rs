@@ -40,10 +40,11 @@ impl Context {
                         );
                     }
                     let right_value = self.to_json(right).unwrap();
+
                     self.variables.insert(left.token.plain(), right_value);
                     
+                    
                 }
-                                
                 None
             },
             TokenType::StringLiteral(s) => Some(serde_json::Value::String(s.to_string())), 

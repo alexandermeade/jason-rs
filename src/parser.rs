@@ -31,10 +31,6 @@ impl Parser {
                 self.next();
                 ASTNode::new(token) 
             },
-            TokenType::Out => {
-                self.next();
-                ASTNode::new(token).children(None, Some(Box::new(self.expr())))             
-            },
             _ => { self.next(); ASTNode::new(token)},
         }
     }
@@ -42,9 +38,19 @@ impl Parser {
     fn term(&mut self) -> ASTNode {
         self.factor()
     }
-
     fn expr(&mut self) -> ASTNode {
-        // Start with the leftmost term
+        // Check for Out FIRST, BEFORE parsing any terms
+        if let Some(token) = self.current() {
+            if token.token_type == TokenType::Out {
+                let out_token = token.clone();
+                self.next(); // consume 'out'
+                let right = self.term(); // parse what comes after 'out'
+                return ASTNode::new(out_token)
+                    .children(None, Some(Box::new(right)));
+            }
+        }
+
+        // NOW parse the leftmost term
         let mut node = self.term();
 
         while let Some(token) = self.current().cloned() {
@@ -53,29 +59,19 @@ impl Parser {
                 TokenType::From   |
                 TokenType::AS     |
                 TokenType::Equals => {
-                    self.next(); // consume ':'
-                    let right = self.term(); // parse right-hand side of ':'
-
-                    // build new AST node where ':' is parent
+                    self.next(); // consume the operator
+                    let right = self.term(); // parse right-hand side
+                    // build new AST node where operator is parent
                     node = ASTNode::new(token)
                         .children(Some(Box::new(node)), Some(Box::new(right)));
                 },
-                TokenType::Out => {
-                    self.next(); // consume 'Out'
-
-                    // parse operand
-                    let right = self.term();
-
-                    // create AST node for unary operator
-                    node = ASTNode::new(token)
-                        .children(None, Some(Box::new(right)));
-                },
+                // REMOVE THIS ENTIRE CASE - Out is now handled at the top
+                // TokenType::Out => { ... },
                 _ => break,
             }
         }
         node
     }
-
     pub fn start(tokens: Vec<Token>) -> Vec<ASTNode> {
         let mut parser = Parser {
             tokens,

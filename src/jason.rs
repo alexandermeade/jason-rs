@@ -1,46 +1,37 @@
-use regex::Regex;
+use std::{fs, error};
 use serde_json::Value;
-use std::fs;
-use std::error;
-use std::collections::HashMap;
-use std::cell::RefCell;
-use std::rc::Rc;
-use crate::context::Context;
-use crate::lexer;
-use crate::parser;
-use crate::token;
+use crate::{context::Context, lexer, parser};
 
+pub fn jason_context_from_file(file_path: String) -> Result<Context, Box<dyn error::Error>> {
+    match fs::metadata(file_path.clone()) {
+        Ok(_) => {},
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                return Err(format!("Path does not exist. {}", file_path).into());
+            } else {
 
-type FileChain =  Rc<RefCell<Vec<String>>>;
+                return Err(e.into());
+            }
+        }
+    }
 
-fn expand_json(mut src: String, input_args: Vec<String>, file_chain_rc: FileChain) -> Result<String, Box<dyn error::Error>> {
+    let src = fs::read_to_string(file_path.clone()).unwrap();    
     let toks = lexer::Lexer::start(src);
 
-    println!("toks: {:#?}", toks);    
     let nodes = parser::Parser::start(toks);
-    println!("result: {:#?}", nodes);   
         
-
-    println!("result -----------");
-
-    let mut context = Context::new();
-
-    
+    let mut context = Context::new(file_path);
 
     for node in nodes {
-        println!("{:?}", context.to_json(&node));
-    }
-    
-    println!("end result -----------");
-    
+        //println!("{:?}", context.to_json(&node));
+        context.to_json(&node);
+    } 
 
-    println!("{:#?}", context);
-
-    println!("-----\n program ended successfully");
-    Ok(String::from(""))
+    
+    Ok(context) 
 }
 
-fn expand_json_from_file(file_path: &str, input_args: Vec<String>, file_chain_rc: FileChain) -> Result<String, Box<dyn error::Error>> {
+fn compile_jason_from_file(file_path: &str) -> Result<serde_json::Value, Box<dyn error::Error>> {
     match fs::metadata(file_path) {
         Ok(_) => {},
         Err(e) => {
@@ -52,37 +43,12 @@ fn expand_json_from_file(file_path: &str, input_args: Vec<String>, file_chain_rc
             }
         }
     }
-    
-    {// limit scope of borrow mut
-        let mut file_chain = file_chain_rc.borrow_mut();
-        let cond = file_path != match file_chain.last() {
-            Some(s) => s,
-            None => "" 
-        }.to_string();
-        
-        if file_chain.contains(&file_path.to_string()) && cond {
-            return Err(format!("Path: {} has already been traveled to", file_path).into())
-        }
-
-        file_chain.push(file_path.to_string());
-    }
 
 
-
-    let contents = fs::read_to_string(file_path).unwrap();    
-
-    expand_json(contents, input_args, file_chain_rc.clone())
+    let context = jason_context_from_file(file_path.into()).unwrap();
+    Ok(context.out)
 }
 
-fn prettify_json(input: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // Parse using JSON5 so unquoted keys are allowed
-    let parsed: Value = json5::from_str(input).unwrap();
-    
-    // Pretty-print with standard indentation
-    let pretty = serde_json::to_string_pretty(&parsed).unwrap();
-    
-    Ok(pretty)
-}
 
 /// Converts a `.jason` file into pretty JSON.
 ///
@@ -98,11 +64,10 @@ fn prettify_json(input: &str) -> Result<String, Box<dyn std::error::Error>> {
 /// let json_text = jason_to_json("Page.jason").unwrap();
 /// println!("{}", json_text);
 /// ```
-pub fn jason_to_json(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let src = expand_json_from_file(file_path, vec![], Rc::new(RefCell::new(vec![]))).unwrap();
-    Ok(src.to_string())
-    //prettify_json(&src)
-    
+pub fn jason_to_json(file_path: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let json = compile_jason_from_file(file_path).unwrap();
+    Ok(json)
+    //prettify_json(&src) 
 }
 
 
@@ -124,11 +89,9 @@ pub fn jason_to_json(file_path: &str) -> Result<String, Box<dyn std::error::Erro
 /// println!("{}", yaml_text);
 /// ```
 pub fn jason_to_yaml(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let src = expand_json_from_file(file_path, vec![], Rc::new(RefCell::new(vec![])))?;
-    
-    let parsed: Value = json5::from_str(&src)?;
-    
-    let yaml_string = serde_yaml::to_string(&parsed)?;
+    let json = compile_jason_from_file(file_path)?;
+        
+    let yaml_string = serde_yaml::to_string(&json)?;
     
     Ok(yaml_string)
 }
@@ -153,9 +116,9 @@ pub fn jason_to_yaml(file_path: &str) -> Result<String, Box<dyn std::error::Erro
 /// ```
 ///
 pub fn jason_to_toml(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let src = expand_json_from_file(file_path, vec![], Rc::new(RefCell::new(vec![])))?;
+    let json = compile_jason_from_file(file_path)?;
 
-    let parsed: Value = json5::from_str(&src)?;
+    let parsed: Value = json;
     
     let toml_string = toml::to_string(&parsed)?;
     

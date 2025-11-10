@@ -1,15 +1,7 @@
 use crate::astnode::ASTNode;
 use crate::context::Context;
-use crate::lexer;
-use crate::parser;
 use crate::token;
 use crate::token::Token;
-use regex::Regex;
-use serde_json::Value;
-use std::cell::RefCell;
-use std::error;
-use std::fs;
-use std::rc::Rc;
 use std::collections::HashMap;
 
 
@@ -24,6 +16,11 @@ impl Template {
     pub fn new(name: String, arguments: Vec<String>, block: token::Args) -> Self {
         Self { name, arguments, block }
     }
+
+    pub fn arguments_count(&self) -> usize {
+        self.arguments.len()
+    }
+
     pub fn resolve(&self, context: &mut Context, arguments: token::Args) -> Option<serde_json::Value> {
         // Build map of parameter name -> argument value
         let args: HashMap<String, serde_json::Value> = self

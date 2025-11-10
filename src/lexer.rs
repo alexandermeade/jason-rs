@@ -1,7 +1,4 @@
-use crate::token;
-use crate::token::TokenType;
-
-use crate::token::Token;
+use crate::{token, token::{TokenType, Token}};
 
 use log::{info, warn, error};
 
@@ -50,7 +47,7 @@ impl Lexer {
         if start < 0 || end >= content.len() {
             return;
         }
-        println!("[{}] {}", target_line, &content[start.. end]);        
+        //println!("[{}] {}", target_line, &content[start.. end]);        
     }
 
     pub fn lex_string(&mut self) -> Token {
@@ -136,7 +133,7 @@ impl Lexer {
             self.next();
         }
 
-        println!("start: {}, index: {}", start, self.index);
+        //println!("start: {}, index: {}", start, self.index);
         if start < 0 || self.index  >= self.contents.len() {
             return self.new_token(TokenType::ERR(format!("INCORRECT SET BOUNDS FOR ID at {} {}", row, colmn)), format!("ID LIT def ERROR incorrect bounds from [{} to {}] during substring", start, self.index));
         }

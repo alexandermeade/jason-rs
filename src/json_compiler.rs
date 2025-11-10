@@ -1,8 +1,7 @@
-use crate::astnode::ASTNode;
-use crate::context::{Context}; 
+use crate::{astnode::ASTNode, context::Context};
 
 pub fn ast_to_context(nodes: Vec<ASTNode>) -> Context {
-    Context::new()
+    Context::new("dummy path".into())
 }
 
 

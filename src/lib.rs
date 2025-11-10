@@ -58,3 +58,34 @@ mod template;
 mod astnode;
 pub use jason::*;
 
+
+#[cfg(test)]
+mod tests {
+    // Import the outer module’s items
+    use super::*;
+
+    #[test]
+    fn test_add_positive() {
+        assert_eq!(add(2, 3), 5);
+    }
+
+    #[test]
+    fn test_add_negative() {
+        assert_eq!(add(-2, -3), -5);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_panic_example() {
+        panic!("This should panic");
+    }
+}
+
+
+
+
+
+
+
+
+

@@ -16,11 +16,10 @@ name = "jason_rs"
 path = "src/lib.rs"
 
 [dependencies]
-regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-json5 = "0.3"
 serde_yaml = "0.9"
 toml = "0.9"
-log = "0.4.28"
+log = "0.4"          # logging macros
+env_logger = "0.10"  # simple environment-based logger
 

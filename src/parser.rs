@@ -1,9 +1,6 @@
 use crate::token::Token;
 use crate::token::TokenType;
-use crate::token::ArgsToNode;
-use serde_json::{Value, Number};
 use crate::astnode::ASTNode;
-use serde_json::Map;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -29,6 +26,7 @@ impl Parser {
             TokenType::NumberType       | 
             TokenType::List(_)          | 
             TokenType::FnCall(_)        |
+            TokenType::Import(_)        |
             TokenType::StringLiteral(_) => {
                 self.next();
                 ASTNode::new(token) 
@@ -61,6 +59,16 @@ impl Parser {
                     // build new AST node where ':' is parent
                     node = ASTNode::new(token)
                         .children(Some(Box::new(node)), Some(Box::new(right)));
+                },
+                TokenType::Out => {
+                    self.next(); // consume 'Out'
+
+                    // parse operand
+                    let right = self.term();
+
+                    // create AST node for unary operator
+                    node = ASTNode::new(token)
+                        .children(None, Some(Box::new(right)));
                 },
                 _ => break,
             }

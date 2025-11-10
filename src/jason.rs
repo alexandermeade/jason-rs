@@ -23,9 +23,9 @@ pub fn jason_context_from_file(file_path: String) -> Result<Context, Box<dyn err
     let mut context = Context::new(file_path);
 
     for (i, node) in nodes.iter().enumerate() {
-        println!("Processing node {}: {:?}", i, node.token.token_type);
+        //println!("Processing node {}: {:?}", i, node.token.token_type);
         context.to_json(&node);
-        println!("Variables after node {}: {:?}", i, context.variables.keys().collect::<Vec<_>>());
+        //println!("Variables after node {}: {:?}", i, context.variables.keys().collect::<Vec<_>>());
     }
     
     Ok(context) 

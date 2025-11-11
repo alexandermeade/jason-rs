@@ -86,11 +86,11 @@ this warning will be patched in a later version with groups.
 
 | Syntax | Description |
 |--------|-------------|
-| `name(arg1, arg2, ...) {...}` | Defines a template name |
-| `name() {...}` | Defines a template name  |
-| `name {...}` | Defines a template name |
-| `name = ...` | Defines a variable name  |
-| `name(...)` | invokes a template |
+| `name(arg1, arg2, ...) {...}` | Defines a template, name |
+| `name() {...}` | Defines a template, name  |
+| `name {...}` | Defines a template, name |
+| `name = ...` | Defines a variable, name |
+| `name(...)` | invokes a template, name |
 | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |
 
 

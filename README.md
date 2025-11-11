@@ -74,7 +74,7 @@ Dev(name, project, money) {
 
 **main.jason** - The top level file being compiled
 ```jason
-import(Dev) from "./Person.jason"
+import(Dev) from "./Dev.jason"
 
 out Dev("alex", "jason-rs", 0) 
 ```

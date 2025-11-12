@@ -26,6 +26,7 @@ impl Parser {
             TokenType::NumberType       | 
             TokenType::List(_)          | 
             TokenType::FnCall(_)        |
+            TokenType::LuaFnCall(_)     |
             TokenType::Import(_)        |
             TokenType::StringLiteral(_) | 
             TokenType::BoolLiteral(_)   |

@@ -1,8 +1,11 @@
 use std::{fs, error};
 use serde_json::Value;
 use crate::{context::Context, lexer, parser};
+use crate::lua_instance::LuaInstance;
+use std::rc::Rc;
+use std::cell::RefCell;
 
-pub fn jason_context_from_file(file_path: String) -> Result<Context, Box<dyn error::Error>> {
+pub fn jason_context_from_file(file_path: String, lua: Rc<RefCell<LuaInstance>>) -> Result<Context, Box<dyn error::Error>> {
     match fs::metadata(file_path.clone()) {
         Ok(_) => {},
         Err(e) => {
@@ -20,18 +23,16 @@ pub fn jason_context_from_file(file_path: String) -> Result<Context, Box<dyn err
 
     let nodes = parser::Parser::start(toks);
         
-    let mut context = Context::new(file_path);
+    let mut context = Context::new(file_path, lua)?;
 
     for (_i, node) in nodes.iter().enumerate() {
-        //println!("Processing node {}: {:?}", i, node.token.token_type);
         context.to_json(&node);
-        //println!("Variables after node {}: {:?}", i, context.variables.keys().collect::<Vec<_>>());
     }
     
     Ok(context) 
 }
 
-fn compile_jason_from_file(file_path: &str) -> Result<serde_json::Value, Box<dyn error::Error>> {
+fn compile_jason_from_file(file_path: &str, lua:Rc<RefCell<LuaInstance>>) -> Result<serde_json::Value, Box<dyn error::Error>> { 
     match fs::metadata(file_path) {
         Ok(_) => {},
         Err(e) => {
@@ -44,8 +45,7 @@ fn compile_jason_from_file(file_path: &str) -> Result<serde_json::Value, Box<dyn
         }
     }
 
-
-    let context = jason_context_from_file(file_path.into()).unwrap();
+    let context = jason_context_from_file(file_path.into(), lua).unwrap();
     Ok(context.out)
 }
 
@@ -65,7 +65,9 @@ fn compile_jason_from_file(file_path: &str) -> Result<serde_json::Value, Box<dyn
 /// println!("{}", json_text);
 /// ```
 pub fn jason_to_json(file_path: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let json = compile_jason_from_file(file_path).unwrap();
+    // Create Lua state with limited standard libraries
+    let lua = Rc::new(RefCell::new(LuaInstance::new()?));
+    let json = compile_jason_from_file(file_path, lua).unwrap();
     Ok(json)
     //prettify_json(&src) 
 }
@@ -89,7 +91,9 @@ pub fn jason_to_json(file_path: &str) -> Result<serde_json::Value, Box<dyn std::
 /// println!("{}", yaml_text);
 /// ```
 pub fn jason_to_yaml(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let json = compile_jason_from_file(file_path)?;
+
+    let lua = Rc::new(RefCell::new(LuaInstance::new()?));
+    let json = compile_jason_from_file(file_path, lua)?;
         
     let yaml_string = serde_yaml::to_string(&json)?;
     
@@ -116,7 +120,9 @@ pub fn jason_to_yaml(file_path: &str) -> Result<String, Box<dyn std::error::Erro
 /// ```
 ///
 pub fn jason_to_toml(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let json = compile_jason_from_file(file_path)?;
+
+    let lua = Rc::new(RefCell::new(LuaInstance::new()?));
+    let json = compile_jason_from_file(file_path, lua)?;
 
     let parsed: Value = json;
     

@@ -1,6 +1,15 @@
-use crate::{jason, astnode::ASTNode, template::Template, token::{TokenType, ArgsToNode}};
+use crate::{
+    astnode::ASTNode, 
+    jason, 
+    lua_instance::LuaInstance, 
+    template::Template, 
+    token::{ArgsToNode, TokenType}
+};
 use std::collections::HashMap;
+use mlua::Table;
 use serde_json::{Value, Number, Map};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Debug)]
 pub enum ExportType {
@@ -14,6 +23,8 @@ pub struct Context {
     pub templates: HashMap<String, Template>,
     pub out: serde_json::Value,
     pub source_path: String,
+    pub lua_instance: Rc<RefCell<LuaInstance>>,
+    pub lua_env: Table,
 }
 
 impl Context {    
@@ -81,7 +92,7 @@ impl Context {
                 if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
                     if let TokenType::Import(args) = left_node.token.token_type.clone() {
                         if let TokenType::StringLiteral(import_path) = right_node.token.token_type.clone() {
-                            let context = jason::jason_context_from_file(import_path.clone()).unwrap();
+                            let context = jason::jason_context_from_file(import_path.clone(), self.lua_instance.clone()).unwrap();
                             let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();
                             if args.contains(&"*".to_string()) {
                                 let exports = context.export_all();
@@ -116,6 +127,10 @@ impl Context {
 
                 self.templates.insert(node.token.plain(), Template::new(Vec::new(), block.clone()));
                 return None;
+            },
+            TokenType::LuaFnCall(args) => {
+             
+                return Some(serde_json::Value::String(node.token.plain()));
             },
             TokenType::FnCall(args) => {
                 
@@ -170,10 +185,22 @@ impl Context {
         self.variables.remove(&key);
     }
 
-    pub fn new(path: String) -> Self {
-        Context { variables: HashMap::new(), templates: HashMap::new(), out: Value::Null, source_path: path }
-    }
+    pub fn new(path: String, lua_instance: Rc<RefCell<LuaInstance>>) -> Result<Self, Box<dyn std::error::Error>> {
+        let lua_env = {
+            // borrow Lua and create a new table
+            let lua_ref = &lua_instance.borrow().lua_instance;
+            lua_ref.create_table()?
+        };
 
+        Ok(Context {
+            variables: HashMap::new(),
+            templates: HashMap::new(),
+            out: Value::Null,
+            source_path: path,
+            lua_instance,
+            lua_env,
+        })
+    }
     pub fn export(&self, args: Vec<String>) -> Vec<ExportType> {
         let mut exported_values:Vec<ExportType> = Vec::new(); 
 

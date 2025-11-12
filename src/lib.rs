@@ -107,6 +107,7 @@ mod parser;
 mod context;
 mod template;
 mod astnode;
+mod lua_instance;
 pub use jason::*;
 
 

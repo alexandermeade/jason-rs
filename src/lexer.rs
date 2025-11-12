@@ -280,6 +280,9 @@ impl Lexer {
                                 .collect();
                             self.next();
                             self.skip_whitespace(); 
+                            if self.curr_char == '!' {
+                                return self.new_token(TokenType::LuaFnCall(args), format!("{}", id.plain()));                        
+                            }
                             if self.curr_char == '{' {
                                 let inner_toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
                                 let mut inner_args: Vec<Vec<Token>> = inner_toks.split(|tok| tok.token_type == TokenType::Comma)

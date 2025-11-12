@@ -16,6 +16,7 @@ pub enum TokenType {
     Import(Args),
     Export(Args),
     FnCall(Args),
+    LuaFnCall(Args),
     Index(Args),
     // input args, block args
     TemplateDef(Args, Args),

@@ -27,7 +27,10 @@ impl Parser {
             TokenType::List(_)          | 
             TokenType::FnCall(_)        |
             TokenType::Import(_)        |
-            TokenType::StringLiteral(_) => {
+            TokenType::StringLiteral(_) | 
+            TokenType::BoolLiteral(_)   |
+            TokenType::DollarSign       |
+            TokenType::Mult => {
                 self.next();
                 ASTNode::new(token) 
             },

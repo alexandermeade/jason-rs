@@ -25,6 +25,9 @@ impl Context {
                 }
                 Some(self.variables.get(&node.token.plain()).unwrap().clone())
             },
+            TokenType::BoolLiteral(value) => {
+                Some(serde_json::Value::Bool(value.clone()))
+            },
             TokenType::Block(_) => Some(self.block_to_json(node)),
             TokenType::NumberLiteral(num) => Some(serde_json::Value::Number(Number::from_f64(num.parse::<f64>().unwrap().into()).unwrap())),
             TokenType::Equals => {
@@ -80,7 +83,11 @@ impl Context {
                         if let TokenType::StringLiteral(import_path) = right_node.token.token_type.clone() {
                             let context = jason::jason_context_from_file(import_path.clone()).unwrap();
                             let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();
-                            
+                            if args.contains(&"*".to_string()) {
+                                let exports = context.export_all();
+                                self.absorb_exports(exports);
+                                return None;
+                            } 
                             let exports = context.export(args);
                             self.absorb_exports(exports);                            
                             return None;          
@@ -171,6 +178,14 @@ impl Context {
         let mut exported_values:Vec<ExportType> = Vec::new(); 
 
         for arg in &args {
+            
+            if arg == "$" {
+                for (name, value) in self.variables.clone() {
+                    exported_values.push(ExportType::Variable(name, value));
+                }
+                continue;
+            }
+
             if self.variables.contains_key(arg) {
                 let variable = self.variables.get(arg).unwrap().clone();
                 exported_values.push(ExportType::Variable(arg.clone(), variable));
@@ -183,6 +198,20 @@ impl Context {
                 continue;
             }
             panic!("{} is not exported from file {}", arg, self.source_path);
+        }
+
+        exported_values
+    }
+
+    pub fn export_all(&self) -> Vec<ExportType> {
+        let mut exported_values:Vec<ExportType> = Vec::new(); 
+
+        for (name, value) in self.variables.clone() {
+            exported_values.push(ExportType::Variable(name, value));
+        }
+
+        for (name, value) in self.templates.clone() {
+                exported_values.push(ExportType::Template(name, value));
         }
 
         exported_values

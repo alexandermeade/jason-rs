@@ -11,6 +11,7 @@ pub enum TokenType {
     Unknown(char),
     StringLiteral(String),
     NumberLiteral(String),
+    BoolLiteral(bool),
     FloatLiteral(String),
     Import(Args),
     Export(Args),
@@ -70,6 +71,7 @@ pub enum TokenType {
     Embed,
     Use,
     Empty,
+    DollarSign
 }
 
 impl TokenType {
@@ -82,6 +84,8 @@ impl TokenType {
             "as" => TokenType::AS,
             "string" => TokenType::StringType,
             "int" => TokenType::NumberType,
+            "true" => TokenType::BoolLiteral(true),
+            "false" => TokenType::BoolLiteral(false),
             "char" => TokenType::CharType,
             "float" => TokenType::FloatType,
             "const" => TokenType::Const,

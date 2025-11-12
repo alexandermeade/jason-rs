@@ -92,6 +92,10 @@ this warning will be patched in a later version with groups.
 | `name = ...` | Defines a variable name  |
 | `name(...)` | invokes a template |
 | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |
+| `import(*) from "path/to/file.jason"` | imports all templates and all variables from a file |
+| `import($) from "path/to/file.jason"` | imports all variables from a file |
+
+
 
 
 

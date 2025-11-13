@@ -1,8 +1,4 @@
-use mlua::{Lua, Table, Value, StdLib, Result};
-use std::collections::HashMap;
-use std::fs;
-use std::ffi::OsStr; 
-use include_dir::*;
+use mlua::{Lua, Table, StdLib, Result};
 use rand::Rng;
 use include_dir::{include_dir, Dir};
 use crate::context::Context;
@@ -42,9 +38,8 @@ impl LuaInstance {
         base_env.set_metatable(Some(mt));
         
         let code = load_all_base_lua();
-        
-        // Generate seed as integer (i64 instead of u64)
-        let seed: i64 = rand::thread_rng().gen();
+        let mut rng = rand::rng();      // renamed from thread_rng
+        let seed: i64 = rng.random();   // renamed from gen
         lua.globals().set("SAFE_SEED", seed)?;
         
         // Seed the random number generator
@@ -126,12 +121,44 @@ impl LuaInstance {
         }
     }
 
+    pub fn json_to_lua_value(&self, value: serde_json::Value) -> mlua::Result<mlua::Value> {
+        match value {
+            serde_json::Value::Null => Ok(mlua::Value::Nil),
+            serde_json::Value::Bool(b) => Ok(mlua::Value::Boolean(b)),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Ok(mlua::Value::Integer(i))
+                } else if let Some(f) = n.as_f64() {
+                    Ok(mlua::Value::Number(f))
+                } else {
+                    Ok(mlua::Value::Nil)
+                }
+            },
+            serde_json::Value::String(s) => {
+                let lua_string = self.lua_instance.create_string(&s)?;
+                Ok(mlua::Value::String(lua_string))
+            },
+            serde_json::Value::Array(arr) => {
+                let table = self.lua_instance.create_table()?;
+                for (i, val) in arr.iter().enumerate() {
+                    let lua_val = self.json_to_lua_value(val.clone())?;
+                    table.set(i + 1, lua_val)?;
+                }
+                Ok(mlua::Value::Table(table))
+            },
+            serde_json::Value::Object(obj) => {
+                let table = self.lua_instance.create_table()?;
+                for (key, val) in obj.iter() {
+                    let lua_val = self.json_to_lua_value(val.clone())?;
+                    table.set(key.as_str(), lua_val)?;
+                }
+                Ok(mlua::Value::Table(table))
+            }
+        }
+    }
     fn is_lua_array(table: &mlua::Table) -> bool {
         // Check if all keys are consecutive integers starting from 1
         let len = table.len().unwrap_or(0);
         len > 0 && table.contains_key(1).unwrap_or(false)
     }
 }
-
-
-

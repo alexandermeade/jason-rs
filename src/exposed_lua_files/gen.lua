@@ -1,3 +1,4 @@
+
 function random_name()
     local names = {
         "James", "Mary", "Robert", "Patricia", "John", "Jennifer",
@@ -23,3 +24,6 @@ function pick(list)
     return list[math.random(1, #list)]
 end
 
+function random_int(max) 
+    return math.random(1, max)
+end

@@ -68,7 +68,7 @@ impl Context {
                                 None => panic!("failed here {:#?}",node),
                             };
                         }
-                        println!("result {:?}", result); 
+                        //println!("result {:?}", result); 
                         return Some(Value::Array(result)) 
                     }
                     //right sided operations I.E.   n * expression
@@ -80,13 +80,12 @@ impl Context {
                             result.push(value);                        
                         }
                         
-                        println!("result {:?}", result); 
+                        ////println!("result {:?}", result); 
                         return Some(Value::Array(result)) 
                     }
 
                 }
                 panic!("Repeat failed {:#?}", node);
-                None
             },
             TokenType::ID => {
                 if !self.variables.contains_key(&node.token.plain()) {
@@ -160,14 +159,14 @@ impl Context {
                         }
 
                         TokenType::Use(args) => {
-                            println!("USE REACHED");
+                            //println!("USE REACHED");
                             if lua_import_path == "" {
                                 panic!("to import lua functions you must derive from a plain component I.E. use(...) from std\n note how std std is plain text and not in qoutes");
                             }
 
                             let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();                                     
                             for arg in &args {
-                                self.import_from_base(arg);
+                                let _ = self.import_from_base(arg);
                             }
                             if args.contains(&"*".to_string()) {
                                 return None;
@@ -200,14 +199,42 @@ impl Context {
                 return None;
             },
             TokenType::LuaFnCall(args) => {                                 
+                // Convert to JSON first
+                let json_values: Vec<serde_json::Value> = args.to_nodes().iter()
+                    .map(|node| self.to_json(node).unwrap())
+                    .collect();
+
+                // Now borrow lua
                 let lua = self.lua_instance.borrow();
+
+                // Convert to Lua values
+                let lua_args: Vec<mlua::Value> = json_values.iter()
+                    .map(|value| lua.json_to_lua_value(value.clone()).unwrap())
+                    .collect();     
+                /*
                 let result: mlua::Value = lua.lua_instance
-                    .load("return random_name()")        // or load(node.token.plain())
+                    .load(format!("return {}", node.token.plain()))        // or load(node.token.plain())
                     .set_environment(self.lua_env.clone())  // important
+                    .eval(lua_args)
+                    .unwrap();
+                */
+                // Load and evaluate to get the function directly
+                let func: mlua::Function = lua.lua_instance
+                    .load(node.token.plain())
+                    .set_environment(self.lua_env.clone())
                     .eval()
                     .unwrap();
+                
+                // Call the function with arguments
+                let result = 
+                    func.call::<mlua::MultiValue>(mlua::MultiValue::from_vec(lua_args)).unwrap();
 
-                let json_value:serde_json::Value = LuaInstance::lua_value_to_json(&result);
+                // Get the first value from the result
+                let json_value: serde_json::Value = if let Some(first) = result.into_iter().next() {
+                    LuaInstance::lua_value_to_json(&first)
+                } else {
+                    serde_json::Value::Null
+                };
                 return Some(json_value);
             },
             TokenType::FnCall(args) => {
@@ -240,27 +267,22 @@ impl Context {
             self.lua_env.set(k, v)?;
         }
 
-
-        println!("base_env start: ");
+        /*
+        //println!("base_env start: ");
         for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
             let (k, v) = pair.unwrap();
-            println!("\tbase_env contains: {:?} = {:?}", k, v);
+            //println!("\tbase_env contains: {:?} = {:?}", k, v);
         }
 
-        println!("base_env end: ");
+        //println!("base_env end: ");
         
-        println!("context_env start: ");
+        //println!("context_env start: ");
         for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
             let (k, v) = pair.unwrap();
-            println!("\tcontext_env contains: {:?} = {:?}", k, v);
+            //println!("\tcontext_env contains: {:?} = {:?}", k, v);
         }
-
-        println!("context_env end: ");
-
-
-
-
-
+        */
+        //println!("context_env end: ");
         Ok(())
     }
 

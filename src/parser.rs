@@ -103,7 +103,6 @@ impl Parser {
         let mut nodes:Vec<ASTNode> = Vec::new();
         loop {
             let node = parser.expr();
-            //println!("{:#?}", node);
             if node.token.token_type == TokenType::EOT {
                 break;
             }   

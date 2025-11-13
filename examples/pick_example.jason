@@ -1,0 +1,11 @@
+
+Person(name, age) {
+    name: name,
+    age: age
+}
+
+main = Person(random_name()!, random_int(67)!) * 2000
+result = pick(main)!*12
+
+out result
+

@@ -1,5 +1,6 @@
 use crate::{token, token::{TokenType, Token}};
 use log::{info};
+
 pub struct Lexer {
     contents:String,
     tokens: Vec<token::Token>,
@@ -8,6 +9,7 @@ pub struct Lexer {
     row:usize,
     colmn:usize,
 }
+
 impl Lexer {
     pub fn new_token(&self, token_type:TokenType, plain:String) -> Token {
         Token::new(token_type, plain, self.row, self.colmn)
@@ -201,6 +203,7 @@ impl Lexer {
                 self.new_token(TokenType::Divide, format!("/"))
             },
             '%' => self.new_token(TokenType::Mod, format!("%")),
+            '$' => self.new_token(TokenType::DollarSign, format!("$")),
             '"' => self.lex_string(),
             '.' => self.new_token(TokenType::Dot, format!(".")),
             ',' => self.new_token(TokenType::Comma, format!(",")),
@@ -277,6 +280,9 @@ impl Lexer {
                                 .collect();
                             self.next();
                             self.skip_whitespace(); 
+                            if self.curr_char == '!' {
+                                return self.new_token(TokenType::LuaFnCall(args), format!("{}", id.plain()));                        
+                            }
                             if self.curr_char == '{' {
                                 let inner_toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
                                 let mut inner_args: Vec<Vec<Token>> = inner_toks.split(|tok| tok.token_type == TokenType::Comma)

@@ -26,8 +26,13 @@ impl Parser {
             TokenType::NumberType       | 
             TokenType::List(_)          | 
             TokenType::FnCall(_)        |
+            TokenType::LuaFnCall(_)     |
             TokenType::Import(_)        |
-            TokenType::StringLiteral(_) => {
+            TokenType::StringLiteral(_) | 
+            TokenType::BoolLiteral(_)   |
+            TokenType::DollarSign       |
+            TokenType::Use(_)           |
+            TokenType::Mult => {
                 self.next();
                 ASTNode::new(token) 
             },
@@ -36,7 +41,24 @@ impl Parser {
     }
 
     fn term(&mut self) -> ASTNode {
-        self.factor()
+        let mut node = self.factor();
+        // Handle Repeat/Mult at term level (higher precedence)
+        while let Some(token) = self.current().cloned() {
+            match token.token_type {
+                TokenType::Repeat | TokenType::Mult => {
+                    self.next();
+                    let right = self.factor();
+                    node = ASTNode::new(token)
+                        .children(Some(Box::new(node)), Some(Box::new(right)));
+                },
+                _ => break,
+            }
+        }
+
+        node
+
+
+
     }
     fn expr(&mut self) -> ASTNode {
         // Check for Out FIRST, BEFORE parsing any terms
@@ -58,6 +80,7 @@ impl Parser {
                 TokenType::Colon  | 
                 TokenType::From   |
                 TokenType::AS     |
+                TokenType::Append |
                 TokenType::Equals => {
                     self.next(); // consume the operator
                     let right = self.term(); // parse right-hand side
@@ -80,7 +103,6 @@ impl Parser {
         let mut nodes:Vec<ASTNode> = Vec::new();
         loop {
             let node = parser.expr();
-            //println!("{:#?}", node);
             if node.token.token_type == TokenType::EOT {
                 break;
             }   

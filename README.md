@@ -79,6 +79,28 @@ import(Dev) from "./Dev.jason"
 out Dev("alex", "jason-rs", 0) 
 ```
 
+## * operator
+The * operator repeats an expression an integer number of times and then stores it in a list.
+
+```jason
+//this returns ["hello","hello","hello","hello","hello","hello","hello","hello","hello","hello","hello","hello"]
+out  "hello" * 12
+```
+
+**pick_example.jason** 
+```jason
+Person(name, age) {
+    name: name,
+    age: age
+}
+//makes a Person witha random name and int from 0 to 67. 2000 times and stores them into a list
+main = Person(random_name()!, random_int(67)!) * 2000
+//pick one value from main 12 times
+result = pick(main)!*12
+//out the result
+out result
+```
+
 note: this will not import the context around DEV so variables will be ignored unless imported as well. 
 this warning will be patched in a later version with groups.
 
@@ -92,6 +114,11 @@ this warning will be patched in a later version with groups.
 | `name = ...` | Defines a variable, name |
 | `name(...)` | invokes a template, name |
 | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |
+| `import(*) from "path/to/file.jason"` | imports all templates and all variables from a file |
+| `import($) from "path/to/file.jason"` | imports all variables from a file |
+| `func(...)!` | calls a built in function with passed in arguments|
+| `expression * n  OR   n * expression` | repeats expression n times and stores it as a list |
+
 
 
 

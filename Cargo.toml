@@ -24,4 +24,5 @@ log = "0.4"          # logging macros
 env_logger = "0.10"  # simple environment-based logger
 mlua = { version = "0.10", features = ["lua54"] }
 include_dir = "0.7.4"
+rand = "0.9.2"
 

@@ -28,8 +28,66 @@ pub struct Context {
 }
 
 impl Context {    
+
+    pub fn new(path: String, lua_instance: Rc<RefCell<LuaInstance>>) -> Result<Self, Box<dyn std::error::Error>> {
+        let lua_env = {
+            let lua_borrow = lua_instance.borrow();
+            let lua_ref = &lua_borrow.lua_instance;
+            let env = lua_ref.create_table()?;
+            
+            // Set up metatable to inherit from base_env (which inherits from globals)
+            let mt = lua_ref.create_table()?;
+            mt.set("__index", lua_borrow.base_env.clone())?;
+            env.set_metatable(Some(mt));
+            
+            env
+        };
+                        
+        Ok(Context {
+            variables: HashMap::new(),
+            templates: HashMap::new(),
+            out: Value::Null,
+            source_path: path,
+            lua_instance,
+            lua_env,
+        })
+    }
+
     pub fn to_json(&mut self, node: &ASTNode) -> Option<serde_json::Value> {
         match &node.token.token_type {
+            TokenType::Mult => {
+                //left sided experations I.E. expression * n
+                if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
+                    if let TokenType::NumberLiteral(num) = right_node.token.token_type.clone() {
+                        let count = num.parse().expect("failed to parse num");
+                        let mut result: Vec<serde_json::Value> = Vec::new();
+                        for _ in 0..count {
+                            let value = self.to_json(left_node);
+                            match value {
+                                Some(v) => result.push(v),
+                                None => panic!("failed here {:#?}",node),
+                            };
+                        }
+                        println!("result {:?}", result); 
+                        return Some(Value::Array(result)) 
+                    }
+                    //right sided operations I.E.   n * expression
+                    if let TokenType::NumberLiteral(num) = left_node.token.token_type.clone() {
+                        let count = num.parse().expect("failed to parse num");
+                        let mut result: Vec<serde_json::Value> = Vec::new();
+                        for _ in 0..count {
+                            let value = self.to_json(right_node).unwrap();
+                            result.push(value);                        
+                        }
+                        
+                        println!("result {:?}", result); 
+                        return Some(Value::Array(result)) 
+                    }
+
+                }
+                panic!("Repeat failed {:#?}", node);
+                None
+            },
             TokenType::ID => {
                 if !self.variables.contains_key(&node.token.plain()) {
                     panic!("the variable {} does not exist in file {}", node.token.plain(), self.source_path);
@@ -68,30 +126,24 @@ impl Context {
                     .map(|n| self.to_json(&n).unwrap())
                     .collect::<Vec<serde_json::Value>>())
             ),
-            /*
-            TokenType::Dot => {
-                if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
-                    let left = &left_node;
-                    let right = &right_node;
-
-                    if left.token.token_type != TokenType::ID || right.token.token_type != TokenType::ID{
-                        panic!(
-                            "[ERROR] {}.{}, accessor and identifier must be a valid identifier!",
-                            left.token.plain(),
-                            right.token.plain()
-                        );
-                    }
-                    let right_value = self.to_json(right).unwrap();
-                    self.variables.insert(left.token.plain(), right_value); 
-                    return None
-                }
-                panic!("dot operator must have two identifiers with it. Context.Identifier");
-            },
-            */
             TokenType::From => {
                 if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
-                    if let TokenType::Import(args) = left_node.token.token_type.clone() {
-                        if let TokenType::StringLiteral(import_path) = right_node.token.token_type.clone() {
+                    let mut import_path:String = "".to_string();
+                    let mut lua_import_path: String = "".to_string();
+                    match right_node.token.token_type.clone() {
+                        TokenType::StringLiteral(path) => {
+                            import_path = path;
+                        },
+                        TokenType::ID => {
+                            lua_import_path = right_node.token.plain();
+                        },
+                        _ => panic!("[ERROR] from statement must have a string path\n ... from \"<Path>\"")
+                    }
+                    match left_node.token.token_type.clone() {
+                        TokenType::Import(args) =>  { 
+                            if import_path == "" {
+                                panic!("to import templates/variable you must import from a string path I.E. import(...) from \"path/to/file\"");
+                            }
                             let context = jason::jason_context_from_file(import_path.clone(), self.lua_instance.clone()).unwrap();
                             let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();
                             if args.contains(&"*".to_string()) {
@@ -99,11 +151,30 @@ impl Context {
                                 self.absorb_exports(exports);
                                 return None;
                             } 
+
+
+
                             let exports = context.export(args);
-                            self.absorb_exports(exports);                            
-                            return None;          
+                            self.absorb_exports(exports);                           
+                            return None;
                         }
-                        panic!("[ERROR] from statement must have a string path\n ... from \"<Path>\"") 
+
+                        TokenType::Use(args) => {
+                            println!("USE REACHED");
+                            if lua_import_path == "" {
+                                panic!("to import lua functions you must derive from a plain component I.E. use(...) from std\n note how std std is plain text and not in qoutes");
+                            }
+
+                            let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();                                     
+                            for arg in &args {
+                                self.import_from_base(arg);
+                            }
+                            if args.contains(&"*".to_string()) {
+                                return None;
+                            } 
+                            return None; 
+                        },
+                        _ => panic!("[ERROR] from statement must have a string path\n ... from \"<Path>\"")
                     }
                 }
                 return None;
@@ -128,9 +199,16 @@ impl Context {
                 self.templates.insert(node.token.plain(), Template::new(Vec::new(), block.clone()));
                 return None;
             },
-            TokenType::LuaFnCall(args) => {
-             
-                return Some(serde_json::Value::String(node.token.plain()));
+            TokenType::LuaFnCall(args) => {                                 
+                let lua = self.lua_instance.borrow();
+                let result: mlua::Value = lua.lua_instance
+                    .load("return random_name()")        // or load(node.token.plain())
+                    .set_environment(self.lua_env.clone())  // important
+                    .eval()
+                    .unwrap();
+
+                let json_value:serde_json::Value = LuaInstance::lua_value_to_json(&result);
+                return Some(json_value);
             },
             TokenType::FnCall(args) => {
                 
@@ -145,6 +223,45 @@ impl Context {
                 panic!("Unknown token: {:?}", token)    
             }
         }
+    }
+    
+    pub fn import_from_base(&mut self, key: &str) -> mlua::Result<()> {
+        let lua_instance = self.lua_instance.borrow();
+        let val: mlua::Value = lua_instance.base_env.get(key)?;
+        self.lua_env.set(key, val.clone())?; // clone the function
+                        
+
+
+
+        let globals = lua_instance.lua_instance.globals();
+
+        for pair in globals.clone().pairs::<mlua::Value, mlua::Value>() {
+            let (k, v) = pair?;
+            self.lua_env.set(k, v)?;
+        }
+
+
+        println!("base_env start: ");
+        for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
+            let (k, v) = pair.unwrap();
+            println!("\tbase_env contains: {:?} = {:?}", k, v);
+        }
+
+        println!("base_env end: ");
+        
+        println!("context_env start: ");
+        for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
+            let (k, v) = pair.unwrap();
+            println!("\tcontext_env contains: {:?} = {:?}", k, v);
+        }
+
+        println!("context_env end: ");
+
+
+
+
+
+        Ok(())
     }
 
     fn block_to_json(&mut self, node: &ASTNode) -> serde_json::Value {
@@ -185,22 +302,6 @@ impl Context {
         self.variables.remove(&key);
     }
 
-    pub fn new(path: String, lua_instance: Rc<RefCell<LuaInstance>>) -> Result<Self, Box<dyn std::error::Error>> {
-        let lua_env = {
-            // borrow Lua and create a new table
-            let lua_ref = &lua_instance.borrow().lua_instance;
-            lua_ref.create_table()?
-        };
-
-        Ok(Context {
-            variables: HashMap::new(),
-            templates: HashMap::new(),
-            out: Value::Null,
-            source_path: path,
-            lua_instance,
-            lua_env,
-        })
-    }
     pub fn export(&self, args: Vec<String>) -> Vec<ExportType> {
         let mut exported_values:Vec<ExportType> = Vec::new(); 
 
@@ -242,6 +343,10 @@ impl Context {
         }
 
         exported_values
+    }
+
+    pub fn import_lua() {
+
     }
 
     pub fn absorb_exports(&mut self, exports: Vec<ExportType>) {

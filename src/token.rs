@@ -59,6 +59,9 @@ pub enum TokenType {
     GreaterThan,
     // keywords
     From,
+    Repeat,
+    Append, 
+    Unpack,
     FN,
     Let,
     AS,
@@ -70,9 +73,9 @@ pub enum TokenType {
     FloatType,
     CharType,
     Embed,
-    Use,
+    Use(Args),
     Empty,
-    DollarSign
+    DollarSign,
 }
 
 impl TokenType {
@@ -94,7 +97,9 @@ impl TokenType {
             "embed" => TokenType::Embed,
             "return" => TokenType::Return,
             "out" => TokenType::Out,
-            "use" => TokenType::Use,
+            "repeat" => TokenType::Repeat,
+            "append" => TokenType::Append,
+            "unpack" => TokenType::Unpack,
             _ => TokenType::ID
         }
     }
@@ -156,6 +161,7 @@ impl Token {
             return match name {
                 "import" => Token::new(TokenType::Import(args), name.to_string(), row, colmn),
                 "export" => Token::new(TokenType::Export(args), name.to_string(), row, colmn),
+                "use" => Token::new(TokenType::Use(args), name.to_string(), row, colmn),
                 _ => self,
             } 
         }

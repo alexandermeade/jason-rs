@@ -301,6 +301,7 @@ impl Lexer {
                                 .collect();                                            
                             return self.new_token(TokenType::Index(args), format!("Index of [{}]", id.plain()));                        
                         },
+                        /*
                         '{' => {
                             let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
                             let mut args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
@@ -308,7 +309,7 @@ impl Lexer {
                                 .collect();                                           
                             args.retain(|vec| !vec.is_empty());
                             return self.new_token(TokenType::TemplateDef(vec![], args), format!("{}", id.plain()));                        
-                        },
+                        },*/
                          _ => {}
                     }
                     self.back(); //has to offset the whitespace skip. to move pointer back into
@@ -356,6 +357,7 @@ impl Lexer {
             },
         };     
     }
+
     pub fn start(contents:String) -> Vec<Token>{ 
         if contents.is_empty() {
             return Vec::new();
@@ -371,7 +373,7 @@ impl Lexer {
         while lexer.curr_char != '\0' {
             lexer.skip_whitespace();
             let tok = lexer.lex();
-            if tok.token_type != TokenType::NewLine {
+            if tok.token_type != TokenType::NewLine && tok.token_type != TokenType::EOF{
                 lexer.tokens.push(tok);
             }
             lexer.next();

@@ -101,6 +101,7 @@
 //! Licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
 
 pub mod jason;
+mod jason_hidden;
 mod lexer; 
 mod token;
 mod parser;

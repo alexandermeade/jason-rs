@@ -16,10 +16,6 @@ impl Template {
         Self { arguments, block }
     }
 
-    pub fn arguments_count(&self) -> usize {
-        self.arguments.len()
-    }
-
     pub fn resolve(&self, context: &mut Context, arguments: token::Args) -> Option<serde_json::Value> {
         // Build map of parameter name -> argument value
         let args: HashMap<String, serde_json::Value> = self

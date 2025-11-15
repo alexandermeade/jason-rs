@@ -5,6 +5,7 @@ use crate::astnode::ASTNode;
 
 pub type Args = Vec<Vec<Token>>;
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     ERR(String),
@@ -20,7 +21,7 @@ pub enum TokenType {
     Index(Args),
     // input args, block args
     TemplateDef(Args, Args),
-    StructDef(Box<Token>, Args),
+    //StructDef(Box<Token>, Args),
     Block(Args),
     List(Args),
     Path(String),
@@ -104,13 +105,17 @@ impl TokenType {
         }
     }
 
+    //rust thinks this function isn't being called but is :/
+    #[allow(dead_code)]
     pub fn is_err(&self) -> bool {
         return match self {
             TokenType::ERR(_) => true,
             _ => false,
         }
     }
-
+      
+    //rust thinks this function isn't being called but is :/
+    #[allow(dead_code)]
     pub fn is_bound(&self) -> bool { 
         return match *self {
             TokenType::EOT |
@@ -118,7 +123,8 @@ impl TokenType {
             _ => false,
         }
     }
-
+    //rust thinks this function isn't being called but is :/
+    #[allow(dead_code)]
     pub fn is_type(&self) -> bool {
         return *self == TokenType::StringType || 
                *self == TokenType::NumberType || 
@@ -126,11 +132,7 @@ impl TokenType {
                *self == TokenType::CharType   ||
                matches!(*self, TokenType::InnerType(_, _)); 
     }
-    //NOTE: this function is terrible and remove it on release
-    pub fn name(&self) -> String {
-        let s = format!("{:?}", self);
-        s.split('(').next().unwrap().to_string()
-    }
+
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -168,34 +170,22 @@ impl Token {
 
         return self;
     }   
-    pub fn into_path(toks: Vec<Token>) -> Token {
-        let mut result:String = "".to_string();
-        let row = toks[0].row;
-        let colmn = toks[0].colmn;
-        for tok in toks {
-            result.push_str(&tok.plain());
-        }
-        return Token::new(TokenType::Path(result.clone()), result, row, colmn);
-    }
-
-    pub fn to_json(&self) -> String {
-        match self.token_type {
-            _ => self.plain()
-        }
-    }
 
     pub fn plain(&self) -> String {
         self.plain.clone()
     }
-
+    
+    #[allow(dead_code)]
     pub fn is_err(&self) -> bool {
         self.token_type.is_err()
     }
 
+    #[allow(dead_code)]
     pub fn is_bound(&self) -> bool {
         self.token_type.is_bound()
     }
 
+    #[allow(dead_code)]
     pub fn empty() -> Token {
         Token {
             token_type: TokenType::Empty,

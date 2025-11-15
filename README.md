@@ -38,20 +38,19 @@ fn main() {
 
 ### Jason File
 ```jason
-// a variable that holds an object of those fields
-alex = {
+//a variable that holds a value
+project_name = "jason-rs"
+
+//what gets exported at the top level
+out {
     name: "Alex",
     project: "jason-rs",
     money: 0,
 }
-
-//what gets exported at the top level
-out alex 
 ```
 
 ### Jason Templates
 ```jsaon
-
 Dev(name, project, money) {
     name: name,
     project: project,
@@ -104,21 +103,97 @@ out result
 note: this will not import the context around DEV so variables will be ignored unless imported as well. 
 this warning will be patched in a later version with groups.
 
+## JasonBuilder
+
+`JasonBuilder` allows you to add Lua dependencies to your `.jason` parsing pipeline.
+
+Start with no Lua dependencies:
+
+```rust
+use jason_rs::JasonBuilder;
+
+let builder = JasonBuilder::new();
+```
+
+## Adding Lua Dependencies
+
+Include Lua files:
+
+```rust
+let builder = JasonBuilder::new()
+    .include_lua_file("scripts/helpers.lua")?
+    .include_lua_file("scripts/math.lua")?;
+```
+
+Or raw Lua source:
+
+```rust
+let lua_code = r#"function add(a,b) return a+b end"#;
+let builder = JasonBuilder::new().include_lua(lua_code)?;
+```
+Both methods are chainable, allowing you to add multiple Lua dependencies easily.
+
+Then you can just run the standard functions from converting `jason` to `json` using builder
+
+```rust
+fn main() -> Result<(), Box<dyn std::error::Error>>{
+    let result = jason_rs::JasonBuilder::new()
+        .include_lua(r#"
+            -- Returns the part of `text` before the first occurrence of `delimiter`
+            function split_first(text, delimiter)
+                local delim_start, _ = string.find(text, delimiter, 1, true)
+                if delim_start then
+                    return string.sub(text, 1, delim_start - 1)
+                else
+                    return text  -- no delimiter found, return the whole string
+                end
+            end
+        "#)?.jason_src_to_json(r#"            
+            User(email, password, ip) {
+                email: email,
+                password: password,
+                username: split_first(email, "@")!,
+                ip: ip
+            }
+            out User(random_email()!, random_password()!, random_ipv4()!) * 2 
+        "#)?;         
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+```
+
+result
+```json
+[
+  {
+    "email": "ptcbkvhhda@www.example.com",
+    "ip": "103.121.162.79",
+    "password": "qMdC&PK0y8=s",
+    "username": "ptcbkvhhda"
+  },
+  {
+    "email": "aabzlr@api.demo.org",
+    "ip": "69.44.42.254",
+    "password": "DLPng64XhkQF",
+    "username": "aabzlr"
+  }
+]
+```
+
 ## Syntax Overview
 
 | Syntax | Description |
 |--------|-------------|
 | `name(arg1, arg2, ...) {...}` | Defines a template name |
 | `name() {...}` | Defines a template name  |
-| `name {...}` | Defines a template name |
 | `name = ...` | Defines a variable name  |
 | `name(...)` | invokes a template |
 | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |
 | `import(*) from "path/to/file.jason"` | imports all templates and all variables from a file |
 | `import($) from "path/to/file.jason"` | imports all variables from a file |
 | `func(...)!` | calls a built in function with passed in arguments|
-| `expression * n  OR   n * expression` | repeats expression n times and stores it as a list |
-
+| `expression * n  OR   n * expression` | repeats expression a positive integer n times and stores it as a list |
+| `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|
 
 
 

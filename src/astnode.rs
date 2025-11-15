@@ -19,10 +19,4 @@ impl ASTNode {
         self.right = right;
         self
     }
-
-    pub fn into_json(&self) -> String {
-        "".to_string() 
-    }
-    
-
 }

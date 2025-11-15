@@ -109,6 +109,5 @@ mod context;
 mod template;
 mod astnode;
 mod lua_instance;
+mod jason_errors;
 pub use jason::*;
-
-

@@ -10,6 +10,7 @@ use serde_json::{Value, Number, Map};
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::jason_hidden;
+use crate::jason_errors;
 
 #[derive(Debug)]
 pub enum ExportType {
@@ -25,10 +26,10 @@ pub struct Context {
     pub source_path: String,
     pub lua_instance: Rc<RefCell<LuaInstance>>,
     pub lua_env: Table,
+    pub lua_fn_cache: HashMap<String, mlua::RegistryKey>, // cache lua functions
 }
 
 impl Context {    
-
     pub fn new(path: String, lua_instance: Rc<RefCell<LuaInstance>>) -> Result<Self, Box<dyn std::error::Error>> {
         let lua_env = {
             let lua_borrow = lua_instance.borrow();
@@ -50,6 +51,7 @@ impl Context {
             source_path: path,
             lua_instance,
             lua_env,
+            lua_fn_cache: HashMap::new(),
         })
     }
 
@@ -58,7 +60,7 @@ impl Context {
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
             if let TokenType::NumberLiteral(num) = right_node.token.token_type.clone() {
                 let count = num.parse().expect("failed to parse num");
-                let mut result: Vec<serde_json::Value> = Vec::new();
+                let mut result: Vec<serde_json::Value> = Vec::with_capacity(count);
                 for _ in 0..count {
                     let value = self.to_json(left_node);
                     match value {
@@ -72,7 +74,7 @@ impl Context {
             //right sided operations I.E.   n * expression
             if let TokenType::NumberLiteral(num) = left_node.token.token_type.clone() {
                 let count = num.parse().expect("failed to parse num");
-                let mut result: Vec<serde_json::Value> = Vec::new();
+                let mut result: Vec<serde_json::Value> = Vec::with_capacity(count);
                 for _ in 0..count {
                     let value = self.to_json(right_node).unwrap();
                     result.push(value);                        
@@ -174,14 +176,36 @@ impl Context {
             let lua_args: Vec<mlua::Value> = json_values.iter()
                 .map(|value| lua.json_to_lua_value(value.clone()).unwrap())
                 .collect();     
-         
+            let fn_name = node.token.plain();
+            
+            //retrieve function from cache or load functino into cache
+            let func = if let Some(key) = self.lua_fn_cache.get(&fn_name) {
+                //get function from cache
+                lua.lua_instance.registry_value::<mlua::Function>(key).unwrap()
+            } else {
+                // load function from lua directly  
+                let func: mlua::Function = lua.lua_instance
+                    .load(&fn_name)
+                    .set_environment(self.lua_env.clone())
+                    .eval()
+                    .expect(&format!("failed to load function {}", fn_name));
+                
+                // Store in registry for reuse
+                let key = lua.lua_instance.create_registry_value(func.clone()).unwrap();
+                drop(lua); // Drop borrow before mutable access
+                self.lua_fn_cache.insert(fn_name.clone(), key);
+                func
+            };
+
+
+            /*
             // Load and evaluate to get the function directly
             let func: mlua::Function = lua.lua_instance
                 .load(node.token.plain())
                 .set_environment(self.lua_env.clone())
                 .eval()
                 .expect(&format!("failed to load function {}", node.token.plain()));
-            
+            */
             // Call the function with arguments
             let result = 
                 func.call::<mlua::MultiValue>(mlua::MultiValue::from_vec(lua_args)).unwrap();

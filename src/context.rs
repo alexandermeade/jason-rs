@@ -10,6 +10,8 @@ use serde_json::{Value, Number, Map};
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::jason_hidden;
+
+#[allow(unused_imports)]
 use crate::jason_errors;
 
 #[derive(Debug)]
@@ -86,7 +88,6 @@ impl Context {
 
         }
         panic!("Repeat failed {:#?}", node);
-
     }
 
     pub fn eval_equal(&mut self, node: &ASTNode) -> Option<serde_json::Value> {
@@ -220,10 +221,38 @@ impl Context {
         }
         panic!("at eval_lua_fn token is not of luafncall")
     }
+    
+    pub fn eval_plus(&mut self, node:&ASTNode) -> Option<serde_json::Value> {
+        let left = self.to_json(node.left.as_ref()?)?;
+        let right = self.to_json(node.right.as_ref()?)?;
+
+        match (left, right) {
+            //[] + [] => [1,2,3] + [4,5] = [1,2,3,4,5]
+            (Value::Array(mut a), Value::Array(b)) => {
+                a.extend(b);
+                Some(Value::Array(a))
+            },
+            //"..." + "..." => "hello" + " world" = "hello world"
+            (Value::String(a), Value::String(b)) => {
+                Some(Value::String(a + &b))
+            }
+            // {...} + {...} => {name: "Alex"} + {age:20} = {name:"Alex", age: 20} 
+            (Value::Object(mut a), Value::Object(b)) => {
+                a.extend(b);
+                Some(Value::Object(a))
+            }
+
+            // Add other cases if needed:
+            // (Value::Number(a), Value::Number(b)) => ...
+            
+            other => panic!("invalid + operation for values {:?}", other),
+        }
+    }
 
     pub fn to_json(&mut self, node: &ASTNode) -> Option<serde_json::Value> {
         match &node.token.token_type {
             TokenType::Mult => self.eval_mult(node),
+            TokenType::Plus => self.eval_plus(node),
             TokenType::ID => {
                 if !self.variables.contains_key(&node.token.plain()) {
                     panic!("the variable {} does not exist in file {}", node.token.plain(), self.source_path);

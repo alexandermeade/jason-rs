@@ -1,11 +1,15 @@
+
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct JasonError {
     pub message: String,
     pub context: Vec<String>, // stack of function calls / nodes
 }
 
+#[allow(dead_code)]
 pub type JasonResult<T> = Result<T, JasonError>;
 
+#[allow(dead_code)]
 impl JasonError {
     pub fn new(msg: impl Into<String>) -> Self {
         JasonError { message: msg.into(), context: Vec::new() }

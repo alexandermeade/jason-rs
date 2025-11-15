@@ -45,7 +45,7 @@ impl Parser {
         // Handle Repeat/Mult at term level (higher precedence)
         while let Some(token) = self.current().cloned() {
             match token.token_type {
-                TokenType::Repeat | TokenType::Mult => {
+                TokenType::Repeat | TokenType::Mult | TokenType::Plus=> {
                     self.next();
                     let right = self.factor();
                     node = ASTNode::new(token)

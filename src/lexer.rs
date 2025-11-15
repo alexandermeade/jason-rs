@@ -294,13 +294,14 @@ impl Lexer {
                             self.back();
                             return self.new_token(TokenType::FnCall(args), format!("{}", id.plain())).find_fn_keyword();                        
                         },
+                        /*
                         '[' => {
                             let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenBracket, TokenType::ClosedBracket);
                             let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                                 .map(|slice| slice.to_vec()) // Convert each slice to Vec<Token>
                                 .collect();                                            
                             return self.new_token(TokenType::Index(args), format!("Index of [{}]", id.plain()));                        
-                        },
+                        },*/
                         /*
                         '{' => {
                             let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);

@@ -93,6 +93,9 @@
 //! | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from a file |
 //! | `import(*) from "path/to/file.jason"` | imports all templates and all variables from a file |
 //! | `import($) from "path/to/file.jason"` | imports all variables from a file |
+//!| `{name: "Alex"} + {age: 20}}` | Object concat yeilds {name: "Alex"} + {age: 20} = {name: "Alex", age: 20}. Note it overrides keys with right dominance|
+//!| `[1,2,3] + [4,5]` | list concat expressions. yeilds [1,2,3] + [4,5] = [1,2,3,4,5]|
+//!| `"hello" + " world"` | String concat yeilds "hello" + " world" = "hello world"|
 //!
 //! Parses a `.jason` file at the given path and returns a serde_json value object which can then be converted to structs
 //!

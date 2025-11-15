@@ -194,8 +194,9 @@ result
 | `func(...)!` | calls a built in function with passed in arguments|
 | `expression * n  OR   n * expression` | repeats expression a positive integer n times and stores it as a list |
 | `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|
-
-
+| `{name: "Alex"} + {age: 20}}` | Object concat yeilds {name: "Alex"} + {age: 20} = {name: "Alex", age: 20}. Note it overrides keys with right dominance|
+| `[1,2,3] + [4,5]` | list concat expressions. yeilds [1,2,3] + [4,5] = [1,2,3,4,5]|
+| `"hello" + " world"` | String concat yeilds "hello" + " world" = "hello world"|
 
 Parses a `.jason` file at the given path and returns a serde_json value object which can then be converted to structs
 

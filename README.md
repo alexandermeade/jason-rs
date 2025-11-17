@@ -82,8 +82,8 @@ out Dev("alex", "jason-rs", 0)
 The * operator repeats an expression an integer number of times and then stores it in a list.
 
 ```jason
-//this returns ["hello","hello","hello","hello","hello","hello","hello","hello","hello","hello","hello","hello"]
-out  "hello" * 12
+//this returns ["hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋"]
+out  "hello👋" * 12
 ```
 
 **pick_example.jason** 
@@ -196,7 +196,7 @@ result
 | `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|
 | `{...} + {...}` | Object concat yeilds {name: "Alex"} + {age: 20} = {name: "Alex", age: 20}. Note it overrides keys with right dominance|
 | `[...] + [...]` | list concat expressions. yeilds [1,2,3] + [4,5] = [1,2,3,4,5]|
-| `"..." + "..."` | String concat yeilds "hello" + " world" = "hello world"|
+| `"..." + "..."` | String concat yeilds "hello" + " world" = "hello world". strings support unicode!|
 
 Parses a `.jason` file at the given path and returns a serde_json value object which can then be converted to structs
 

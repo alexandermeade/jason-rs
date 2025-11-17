@@ -3,7 +3,7 @@ Person(name) {
     name: name
 }
 
-main = Pick(3*Person(random_name()!))!
+main = Pick(Person(random_name()! * 3))!
 
 out main
 

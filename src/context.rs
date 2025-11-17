@@ -70,7 +70,6 @@ impl Context {
                         None => panic!("failed here {:#?}",node),
                     };
                 }
-                //println!("result {:?}", result); 
                 return Some(Value::Array(result)) 
             }
             //right sided operations I.E.   n * expression
@@ -82,7 +81,6 @@ impl Context {
                     result.push(value);                        
                 }
                 
-                ////println!("result {:?}", result); 
                 return Some(Value::Array(result)) 
             }
 
@@ -143,7 +141,6 @@ impl Context {
                 }
 
                 TokenType::Use(args) => {
-                    //println!("USE REACHED");
                     if lua_import_path == "" {
                         panic!("to import lua functions you must derive from a plain component I.E. use(...) from std\n note how std std is plain text and not in qoutes");
                     }
@@ -263,7 +260,10 @@ impl Context {
                 Some(serde_json::Value::Bool(value.clone()))
             },
             TokenType::Block(_) => Some(self.block_to_json(node)),
-            TokenType::NumberLiteral(num) => Some(serde_json::Value::Number(Number::from_f64(num.parse::<f64>().unwrap().into()).unwrap())),
+            TokenType::NumberLiteral(num) => {
+
+                Some(serde_json::Value::Number(Number::from_f64(num.parse::<f64>().unwrap().into()).expect(&format!("broke here: {:#?}", node))))
+            },
             TokenType::Equals => self.eval_equal(node),
             TokenType::StringLiteral(s) => Some(serde_json::Value::String(s.to_string())), 
             TokenType::List(args)=> Some(
@@ -325,21 +325,17 @@ impl Context {
         }
 
         /*
-        //println!("base_env start: ");
         for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
             let (k, v) = pair.unwrap();
             //println!("\tbase_env contains: {:?} = {:?}", k, v);
         }
 
-        //println!("base_env end: ");
         
-        //println!("context_env start: ");
         for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
             let (k, v) = pair.unwrap();
             //println!("\tcontext_env contains: {:?} = {:?}", k, v);
         }
         */
-        //println!("context_env end: ");
         Ok(())
     }
 

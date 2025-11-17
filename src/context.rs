@@ -85,7 +85,7 @@ impl Context {
             }
 
         }
-        panic!("Repeat failed {:#?}", node);
+        panic!("Repeat failed {:?}", node);
     }
 
     pub fn eval_equal(&mut self, node: &ASTNode) -> Option<serde_json::Value> {

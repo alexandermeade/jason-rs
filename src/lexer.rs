@@ -257,12 +257,15 @@ impl Lexer {
                 self.next();
                 return self.lex();
             },
+
             '(' => {
+                /*
                 let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenParen, TokenType::ClosedParen);
                 let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                     .map(|slice| slice.to_vec())
                     .collect();
-                return self.new_token(TokenType::List(args), format!("Tuple"));
+                return self.new_token(TokenType::Tuple(args), format!("Tuple"));*/
+                return self.new_token(TokenType::OpenParen, format!("("));
             },
             '[' => {
                 let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenBracket, TokenType::ClosedBracket);

@@ -72,3 +72,26 @@ function random_ipv4()
     return table.concat(parts, ".")
 end
 
+function random_first_name()
+    local first = {
+        "Alex", "James", "John", "Michael", "Sarah", "Emily", "Hannah",
+        "Laura", "Daniel", "David", "Chris", "Ryan", "Ethan", "Grace",
+        "Liam", "Noah", "Olivia", "Ava", "Emma", "Mason"
+    }
+
+    local f = first[ math.random(#first) ]
+
+    return f 
+end
+
+function random_last_name()
+    local last = {
+        "Smith", "Johnson", "Brown", "Garcia", "Miller", "Davis",
+        "Martinez", "Lee", "Clark", "Walker", "Hall", "Young",
+        "King", "Wright", "Lopez", "Hill", "Scott", "Green"
+    }
+    local l = last[ math.random(#last) ]
+    return l
+end
+
+

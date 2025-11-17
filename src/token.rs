@@ -24,6 +24,7 @@ pub enum TokenType {
     //StructDef(Box<Token>, Args),
     Block(Args),
     List(Args),
+    Tuple(Args),
     Path(String),
     ID,
     Template(Vec<Token>, Args),

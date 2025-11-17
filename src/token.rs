@@ -140,8 +140,8 @@ impl TokenType {
 pub struct Token {
     plain: String,
     pub token_type: TokenType,
-    row: usize,
-    colmn: usize,
+    pub row: usize,
+    pub colmn: usize,
 }
 
 impl Token {

@@ -2,6 +2,8 @@ use mlua::{Lua, Table, StdLib, Result};
 use rand::Rng;
 use include_dir::{include_dir, Dir};
 
+use crate::CompilerResult;
+
 static BASE_LUA_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/exposed_lua_files");
 
 
@@ -124,7 +126,7 @@ impl LuaInstance {
     
     }
 
-    pub fn new_with_src(src: String) -> Result<Self> {
+    pub fn new_with_src(src: String) -> CompilerResult<Self> {
         let lua = Lua::new_with(
             StdLib::ALL_SAFE,
             Default::default(),

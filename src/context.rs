@@ -25,7 +25,9 @@ pub struct Context {
     pub lua_instance: Rc<RefCell<LuaInstance>>,
     pub lua_env: Table,
     pub lua_fn_cache: HashMap<String, mlua::RegistryKey>, // cache lua functions
+    pub local_root:Option<Rc<ASTNode>>
 }
+
 impl Context {    
     pub fn new(path: String, lua_instance: Rc<RefCell<LuaInstance>>) -> JasonResult<Self> {
         let lua_env = {
@@ -49,8 +51,18 @@ impl Context {
             lua_instance,
             lua_env,
             lua_fn_cache: HashMap::new(),
+            local_root: None
         })
     }
+    
+    pub fn set_local_root(&mut self, root: &ASTNode) {
+        self.local_root = Some(Rc::new(root.clone()));
+    }
+
+    pub fn clear_local_root(&mut self) {
+        self.local_root = None;
+    }
+
     fn eval_mult(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>>{
         // Repeat operations: expression * n or n * expression
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
@@ -86,7 +98,7 @@ impl Context {
                     format!("Repeat failed {:?}", node))),
             }
         }
-        Err(JasonError::new(JasonErrorKind::MissingNode, None,
+        Err(JasonError::new(JasonErrorKind::MissingValue, None,
             format!("Repeat failed {:?}", node)))
     }
     pub fn eval_equal(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
@@ -165,7 +177,7 @@ impl Context {
                 .iter()
                 .map(|node| {
                     self.to_json(node)?
-                        .ok_or_else(|| JasonError::new(JasonErrorKind::ValueError,None, "List item is None"))
+                        .ok_or_else(|| JasonError::new(JasonErrorKind::ValueError,None, "Argument is Empty"))
                 })
                 .collect::<JasonResult<Vec<Value>>>()?;
             // Now borrow lua
@@ -186,8 +198,8 @@ impl Context {
                     .load(&fn_name)
                     .set_environment(self.lua_env.clone())
                     .eval()
-                    .map_err(|e| JasonError::new(JasonErrorKind::LuaError,None,
-                        format!("failed to load function {}: {}", fn_name, e)))?;
+                    .map_err(|e| JasonError::new(JasonErrorKind::LuaError, Some(self.local_root.clone().expect("This should NOT be none")),
+                        format!("failed to find function {}: {}", fn_name, e)))?;
                 
                 // Store in registry for reuse
                 let key = lua.lua_instance.create_registry_value(func.clone())?;
@@ -213,10 +225,10 @@ impl Context {
     
     pub fn eval_plus(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let left = self.to_json(node.left.as_ref().ok_or_else(||
-            JasonError::new(JasonErrorKind::MissingNode,None, "left node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,None, "left node missing"))?)?.ok_or_else(||
             JasonError::new(JasonErrorKind::ValueError,None, "left value is None"))?;
         let right = self.to_json(node.right.as_ref().ok_or_else(||
-            JasonError::new(JasonErrorKind::MissingNode,None, "right node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,None, "right node missing"))?)?.ok_or_else(||
             JasonError::new(JasonErrorKind::ValueError,None, "right value is None"))?;
         
         match (left, right) {
@@ -278,10 +290,10 @@ impl Context {
             TokenType::Out => {
                 if let Some(right_node) = node.right.as_ref() {
                     self.out = self.to_json(right_node)?.ok_or_else(||
-                        JasonError::new(JasonErrorKind::ValueError,None, "out value is None"))?;
+                        JasonError::new(JasonErrorKind::ValueError, Some(node.clone().into()), "out value is None"))?;
                     return Ok(None);
                 }
-                Err(JasonError::new(JasonErrorKind::SyntaxError,None,
+                Err(JasonError::new(JasonErrorKind::SyntaxError, Some(node.clone().into()),
                     "out statement must have valid jason expression.\n example: out \"Hello!\""))
             },
             TokenType::TemplateDef(args, block) => {
@@ -342,12 +354,12 @@ impl Context {
             for node in nodes {
                 if node.token.token_type == TokenType::Colon {
                     let key_node = node.left.as_ref().ok_or_else(||
-                        JasonError::new(JasonErrorKind::MissingNode, Some(Box::new(node.clone())), "Missing key"))?;
+                        JasonError::new(JasonErrorKind::MissingKey, Some(node.clone().into()), "Missing key"))?;
                     let value_node = node.right.as_ref().ok_or_else(||
-                        JasonError::new(JasonErrorKind::MissingNode, Some(Box::new(node.clone())), "Missing value"))?;
+                        JasonError::new(JasonErrorKind::MissingValue, Some(node.clone().into()), "Missing value"))?;
                     if key_node.token.token_type != TokenType::ID {
                         return Err(JasonError::new(JasonErrorKind::SyntaxError,
-                            Some(Box::new(node)), "Key must be an ID"));
+                            Some(node.clone().into()), "Key must be an ID"));
                     }
                     let key = key_node.token.plain();
                     let value = self.to_json(&*value_node)?; // recursive call

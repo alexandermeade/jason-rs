@@ -18,9 +18,11 @@ pub fn jason_context_from_src(src: &str, lua: Rc<RefCell<LuaInstance>>) -> Compi
     let mut errors: Vec<JasonError> = Vec::new();
 
     for node in nodes.iter() {
+        context.set_local_root(node);
         if let Err(e) = context.to_json(&node) {
             errors.push(e);
         }
+        context.clear_local_root();
     }
 
     if !errors.is_empty() {
@@ -64,9 +66,11 @@ pub fn jason_context_from_file(file_path: String, lua: Rc<RefCell<LuaInstance>>)
     let mut errors: Vec<JasonError> = Vec::new();
 
     for node in nodes.iter() {
+        context.set_local_root(node);
         if let Err(e) = context.to_json(&node) {
             errors.push(e);
         }
+        context.clear_local_root();
     }
 
     if !errors.is_empty() {

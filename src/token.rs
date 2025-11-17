@@ -29,7 +29,6 @@ pub enum TokenType {
     ID,
     Template(Vec<Token>, Args),
     InnerType(String, Vec<Token>),
-    FunctionCall(String, Vec<Token>),
     Return,
     //special chars
     Bar,
@@ -195,14 +194,137 @@ impl Token {
             colmn: 0
         }
     }
+
+     pub fn pretty(&self) -> String {
+        match &self.token_type {
+            // ===== Literals =====
+            TokenType::StringLiteral(s) => format!("{:?}", s), // adds quotes
+            TokenType::NumberLiteral(n) => n.clone(),
+            TokenType::FloatLiteral(f) => f.clone(),
+            TokenType::BoolLiteral(b) => b.to_string(),
+
+            // ===== Identifiers & Paths =====
+            TokenType::ID => self.plain.clone(),
+            TokenType::Path(p) => p.clone(),
+
+            // ===== Function calls =====
+            TokenType::FnCall(args)
+            | TokenType::Import(args)
+            | TokenType::Export(args)
+            | TokenType::Use(args) => {
+                let args_str = args.as_string_tuple();
+                format!("{}{}", self.plain, args_str)
+            }
+
+            TokenType::LuaFnCall(args) => {
+                let args_str = args.as_string_tuple();
+                format!("{}{}!", self.plain, args_str)
+            }
+
+            // ===== Index (x[...]) =====
+            TokenType::Index(args) => {
+                let inside = args.as_string_list();
+                format!("{}{}", self.plain, inside)
+            }
+
+            // ===== Template definitions =====
+            TokenType::TemplateDef(input_args, block_args) => {
+                let inputs = input_args.as_string_tuple();
+                let blocks = block_args.as_string_tuple();
+                format!("template {} {}", inputs, blocks)
+            }
+
+            // ===== Templates =====
+            TokenType::Template(tokens, args) => {
+                let name = tokens.iter()
+                    .map(|t| t.pretty())
+                    .collect::<Vec<_>>()
+                    .join("");
+                let args_str = args.as_string_tuple();
+                format!("{}{}", name, args_str)
+            }
+
+            // ===== Composite structures =====
+            TokenType::Block(args) => args.as_string_list().replace("[", "{ ").replace("]", " }"),
+            TokenType::List(args) => args.as_string_list(),
+            TokenType::Tuple(args) => args.as_string_tuple(),
+
+            // ===== Inner generic type (Type<...>) =====
+            TokenType::InnerType(name, toks) => {
+                let inner = toks.iter()
+                    .map(|t| t.pretty())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}<{}>", name, inner)
+            }
+
+            // ===== Simple punctuation =====
+            TokenType::Bar           => "|".to_string(),
+            TokenType::Colon         => ":".to_string(),
+            TokenType::Dot           => ".".to_string(),
+            TokenType::Comma         => ",".to_string(),
+            TokenType::OpenParen     => "(".to_string(),
+            TokenType::ClosedParen   => ")".to_string(),
+            TokenType::OpenBracket   => "[".to_string(),
+            TokenType::ClosedBracket => "]".to_string(),
+            TokenType::OpenCurly     => "{".to_string(),
+            TokenType::ClosedCurly   => "}".to_string(),
+
+            // ===== Operators =====
+            TokenType::Equals => "=".to_string(),
+            TokenType::Plus   => "+".to_string(),
+            TokenType::Minus  => "-".to_string(),
+            TokenType::Mult   => "*".to_string(),
+            TokenType::Divide => "/".to_string(),
+            TokenType::Mod    => "%".to_string(),
+
+            // ===== Comparisons =====
+            TokenType::LessThan    => "<".to_string(),
+            TokenType::GreaterThan => ">".to_string(),
+
+            // ===== Misc =====
+            TokenType::Return     => "return".to_string(),
+            TokenType::From       => "from".to_string(),
+            TokenType::Repeat     => "repeat".to_string(),
+            TokenType::Append     => "append".to_string(),
+            TokenType::Unpack     => "unpack".to_string(),
+            TokenType::FN         => "fn".to_string(),
+            TokenType::Let        => "let".to_string(),
+            TokenType::AS         => "as".to_string(),
+            TokenType::Out        => "out".to_string(),
+            TokenType::Const      => "const".to_string(),
+            TokenType::Type       => "type".to_string(),
+            TokenType::StringType => "string".to_string(),
+            TokenType::NumberType => "int".to_string(),
+            TokenType::FloatType  => "float".to_string(),
+            TokenType::CharType   => "char".to_string(),
+            TokenType::Embed      => "embed".to_string(),
+
+            TokenType::DollarSign => "$".to_string(),
+
+            // ===== Error / unknown =====
+            TokenType::ERR(s) => format!("<err: {}>", s),
+            TokenType::Unknown(c) => c.to_string(),
+
+            // ===== Bounds / EOF =====
+            TokenType::NewLine => "\n".to_string(),
+            TokenType::StartComment => "/*".to_string(),
+            TokenType::EndComment => "*/".to_string(),
+            TokenType::EOF => "<EOF>".to_string(),
+            TokenType::EOT => "<EOT>".to_string(),
+            TokenType::Empty => "".to_string(),
+        }
+    }
 }
 
 pub trait ArgsToNode {
     fn to_nodes(&self) -> Vec<ASTNode>;
+    fn as_string_list(&self) -> String;
+    fn as_string_tuple(&self) -> String;
 }
-
 impl ArgsToNode for Args {
     fn to_nodes(&self) -> Vec<ASTNode> {
+        // keep for actual parsing use
         self.iter()
             .flat_map(|tokens| {
                 let filtered: Vec<Token> = tokens
@@ -214,6 +336,37 @@ impl ArgsToNode for Args {
                 Parser::start(filtered)
             })
             .collect::<Vec<ASTNode>>()
+    }
+
+    fn as_string_list(&self) -> String {
+        "[".to_string()
+            + &self.iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .map(|t| t.pretty()) // 🚀 use pretty of raw token
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+            + "]"
+    }
+
+    fn as_string_tuple(&self) -> String {
+        "(".to_string()
+            + &self
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .map(|t| t.pretty()) // 🚀 preserve literal text
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+            + ")"
     }
 }
 

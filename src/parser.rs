@@ -104,7 +104,6 @@ impl Parser {
         node
     }
     
-    // NEW: Handle addition/subtraction at their own precedence level
     fn addition(&mut self) -> ASTNode {
         let mut node = self.term();
         

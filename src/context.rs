@@ -63,39 +63,42 @@ impl Context {
         self.local_root = None;
     }
 
-    fn eval_mult(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>>{
+    fn repeat_value(&mut self, count: String, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        let count = count.parse::<f64>().map_err(|_| 
+            JasonError::new(JasonErrorKind::ParseError, self.local_root.clone(), format!("failed to parse num {}", count)))?;
+        let bound:usize = count as usize;
+        let mut result: Vec<Value> = Vec::with_capacity(bound);
+        for _ in 0..bound{
+            let value = self.to_json(repeated_node)?.ok_or_else(||
+                JasonError::new(JasonErrorKind::ValueError, self.local_root.clone(),"value is None"))?;
+            result.push(value);
+        }
+        return Ok(Some(Value::Array(result)));
+    }
+
+    fn eval_mult(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         // Repeat operations: expression * n or n * expression
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
             match (&left_node.token.token_type, &right_node.token.token_type) {
+                (_, TokenType::ID) => {
+                    let eval_variable = self.to_json(right_node)?.unwrap();                    
+                    return self.repeat_value(eval_variable.to_string(), &left_node);
+                }
+                (TokenType::ID, _) => {
+                    let eval_variable = self.to_json(left_node)?.unwrap();                    
+                    return self.repeat_value(eval_variable.to_string(), &right_node);
+                }
+
                 // Left-sided: expression * n
                 (_, TokenType::NumberLiteral(num)) => {
-                    let count = num.parse().map_err(|_| 
-                        JasonError::new(JasonErrorKind::ParseError, None, "failed to parse num"))?;
-                    let mut result: Vec<Value> = Vec::with_capacity(count);
-                    for _ in 0..count {
-                        let value = self.to_json(left_node)?;
-                        match value {
-                            Some(v) => result.push(v),
-                            None => return Err(JasonError::new(JasonErrorKind::ValueError, None,
-                                format!("failed here {:#?}", node))),
-                        };
-                    }
-                    return Ok(Some(Value::Array(result)));
+                    return self.repeat_value(num.clone(), &left_node);
                 }
                 // Right-sided: n * expression
                 (TokenType::NumberLiteral(num), _) => {
-                    let count = num.parse().map_err(|_| 
-                        JasonError::new(JasonErrorKind::ParseError, None,"failed to parse num"))?;
-                    let mut result: Vec<Value> = Vec::with_capacity(count);
-                    for _ in 0..count {
-                        let value = self.to_json(right_node)?.ok_or_else(||
-                            JasonError::new(JasonErrorKind::ValueError, None,"value is None"))?;
-                        result.push(value);
-                    }
-                    return Ok(Some(Value::Array(result)));
+                    return self.repeat_value(num.clone(), &left_node);
                 }
-                _ => return Err(JasonError::new(JasonErrorKind::InvalidOperation,None, 
-                    format!("Repeat failed {:?}", node))),
+                _ => return Err(JasonError::new(JasonErrorKind::InvalidOperation, self.local_root.clone(), 
+                    "invalid operation"))
             }
         }
         Err(JasonError::new(JasonErrorKind::MissingValue, None,
@@ -186,25 +189,24 @@ impl Context {
             let lua_args: Vec<mlua::Value> = json_values.iter()
                 .map(|value| lua.json_to_lua_value(value.clone()))
                 .collect::<Result<Vec<_>, _>>()?;     
-            let fn_name = node.token.plain();
+            let fn_tok = node.token.clone();
             
             //retrieve function from cache or load functino into cache
-            let func = if let Some(key) = self.lua_fn_cache.get(&fn_name) {
+            let func = if let Some(key) = self.lua_fn_cache.get(&fn_tok.plain()) {
                 //get function from cache
                 lua.lua_instance.registry_value::<mlua::Function>(key)?
             } else {
                 // load function from lua directly  
                 let func: mlua::Function = lua.lua_instance
-                    .load(&fn_name)
+                    .load(&fn_tok.plain())
                     .set_environment(self.lua_env.clone())
                     .eval()
-                    .map_err(|e| JasonError::new(JasonErrorKind::LuaError, Some(self.local_root.clone().expect("This should NOT be none")),
-                        format!("failed to find function {}: {}", fn_name, e)))?;
+                    .map_err(|e| JasonError::new(JasonErrorKind::LuaFnError(fn_tok.pretty()), Some(self.local_root.clone().expect("This should NOT be none")), format!("failed to find function {}: {}", fn_tok.plain(), e)))?;
                 
                 // Store in registry for reuse
                 let key = lua.lua_instance.create_registry_value(func.clone())?;
                 drop(lua); // Drop borrow before mutable access
-                self.lua_fn_cache.insert(fn_name.clone(), key);
+                self.lua_fn_cache.insert(fn_tok.plain().clone(), key);
                 func
             };
             
@@ -225,11 +227,11 @@ impl Context {
     
     pub fn eval_plus(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let left = self.to_json(node.left.as_ref().ok_or_else(||
-            JasonError::new(JasonErrorKind::MissingValue,None, "left node missing"))?)?.ok_or_else(||
-            JasonError::new(JasonErrorKind::ValueError,None, "left value is None"))?;
+            JasonError::new(JasonErrorKind::MissingValue, self.local_root.clone(), "left side of the expression is missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError,self.local_root.clone(), "left value is None"))?;
         let right = self.to_json(node.right.as_ref().ok_or_else(||
-            JasonError::new(JasonErrorKind::MissingValue,None, "right node missing"))?)?.ok_or_else(||
-            JasonError::new(JasonErrorKind::ValueError,None, "right value is None"))?;
+            JasonError::new(JasonErrorKind::MissingValue,self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError,self.local_root.clone(), "right value is None"))?;
         
         match (left, right) {
             //[] + [] => [1,2,3] + [4,5] = [1,2,3,4,5]
@@ -246,7 +248,7 @@ impl Context {
                 a.extend(b);
                 Ok(Some(Value::Object(a)))
             }
-            other => Err(JasonError::new(JasonErrorKind::InvalidOperation,None,
+            other => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.local_root.clone(),
                 format!("invalid + operation for values {:?}", other))),
         }
     }
@@ -257,7 +259,7 @@ impl Context {
             TokenType::Plus => self.eval_plus(node),
             TokenType::ID => {
                 if !self.variables.contains_key(&node.token.plain()) {
-                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable,None,
+                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()) ,self.local_root.clone(),
                         format!("the variable {} does not exist in file {}", node.token.plain(), self.source_path)));
                 }
                 Ok(Some(self.variables.get(&node.token.plain()).unwrap().clone()))
@@ -308,10 +310,9 @@ impl Context {
                 return Ok(None);
             },
             TokenType::LuaFnCall(_) => self.eval_lua_fn(node),
-            TokenType::FnCall(args) => {
-                
+            TokenType::FnCall(args) => { 
                 if !self.templates.contains_key(&node.token.plain()) {
-                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable,None,
+                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()),None,
                         format!("the template {} does not exist in file {}", node.token.plain(), self.source_path)));
                 }
                 let template = self.templates.get(&node.token.plain()).unwrap().clone();

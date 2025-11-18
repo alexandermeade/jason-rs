@@ -1,6 +1,7 @@
 use std::fmt;
 use std::rc::Rc;
 use crate::astnode::ASTNode;
+use unicode_width::UnicodeWidthChar;
 
 #[derive(Debug)]
 pub enum JasonErrorKind {
@@ -12,7 +13,7 @@ pub enum JasonErrorKind {
     TypeError,
     FileError,
     ContextError,
-    UndefinedVariable,
+    UndefinedVariable(String),
     InvalidOperation,
     MissingNode,
     ConversionError,
@@ -20,6 +21,7 @@ pub enum JasonErrorKind {
     Bundle(Vec<JasonError>),
     ImportError,
     LuaError,
+    LuaFnError(String),
 }
 
 pub struct JasonError {
@@ -28,6 +30,61 @@ pub struct JasonError {
     pub message: String,
     pub context: Vec<String>,
 }
+
+
+fn highlight_string(text: &str, target: &str) -> String {
+    if target.is_empty() || !text.contains(target) {
+        return text.to_string();
+    }
+    
+    let target = if target == "*ALL*" {
+        text
+    } else {target};
+    
+    let text_chars: Vec<char> = text.chars().collect();
+    let target_chars: Vec<char> = target.chars().collect();
+    
+    let mut highlight_line = String::new();
+    let mut i = 0;
+    
+    while i < text_chars.len() {
+        // Check if we're at the start of the target string
+        if i + target_chars.len() <= text_chars.len() {
+            let slice = &text_chars[i..i + target_chars.len()];
+            if slice == &target_chars[..] {
+                // Found a match - add carets for each character in target
+                for ch in &target_chars {
+                    if *ch == '\t' {
+                        highlight_line.push('\t');
+                    } else {
+                        let width = UnicodeWidthChar::width(*ch).unwrap_or(1);
+                        for _ in 0..width {
+                            highlight_line.push('^');
+                        }
+                    }
+                }
+                i += target_chars.len();
+                continue;
+            }
+        }
+        
+        // Not a match - add spacing
+        let ch = text_chars[i];
+        if ch == '\t' {
+            highlight_line.push('\t');
+        } else {
+            let width = UnicodeWidthChar::width(ch).unwrap_or(1);
+            for _ in 0..width {
+                highlight_line.push(' ');
+            }
+        }
+        i += 1;
+    }
+    
+    format!("{}\n{}", text, highlight_line)
+}
+
+
 
 pub type JasonResult<T> = Result<T, JasonError>;
 
@@ -52,7 +109,7 @@ impl JasonError {
             JasonErrorKind::SyntaxError => "Syntax Error",
             JasonErrorKind::ValueError => "Value Error",
             JasonErrorKind::TypeError => "Type Error",
-            JasonErrorKind::UndefinedVariable => "Undefined Variable",
+            JasonErrorKind::UndefinedVariable(_) => "Undefined Variable",
             JasonErrorKind::InvalidOperation => "Invalid Operation",
             JasonErrorKind::MissingNode => "Missing Node",
             JasonErrorKind::ConversionError => "Conversion Error",
@@ -64,6 +121,7 @@ impl JasonError {
             JasonErrorKind::ContextError => "Context Error",
             JasonErrorKind::MissingValue => "Missing Value",
             JasonErrorKind::MissingKey => "Missing Key",
+            JasonErrorKind::LuaFnError(_) => "Lua Function Error"
         }
     }
 }
@@ -102,10 +160,18 @@ impl std::fmt::Display for JasonError {
         
         // If we have an AST node, print the reconstructed code line
         if let Some(node) = &self.node {
-            let code_line = node.root().plain_sum.clone();
-            if !code_line.is_empty() {
-                // Print line number with code
-                writeln!(f, "{:>5} | {}", node.token.row, code_line)?;
+            let code_line = format!("{:>5} | {}", node.token.row, node.root().plain_sum.clone());
+            match &self.kind {
+                JasonErrorKind::UndefinedVariable(var) => {
+                    println!("{:>5}", highlight_string(&code_line, &var));
+                },
+                JasonErrorKind::LuaFnError(fn_name) => {
+                    println!("{:>5}", highlight_string(&code_line, &fn_name));
+                },
+                JasonErrorKind::SyntaxError | JasonErrorKind::MissingKey | JasonErrorKind::MissingValue => { 
+                    println!("{:>5}", highlight_string(&code_line, "*ALL*"));
+                }
+                _ => {}
             }
         }
         

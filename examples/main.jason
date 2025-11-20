@@ -1,9 +1,10 @@
-// a variable that holds an object of those fields
-alex = {
+// a variable that holds the value of the project name 
+project_name = "jason-rs"
+
+//what gets exported at the top level
+out {
     name: "Alex",
-    project: "jason-rs",
+    project: project_name,
     money: 0,
 }
 
-//what gets exported at the top level
-out alex 

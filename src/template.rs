@@ -2,6 +2,7 @@ use crate::astnode::ASTNode;
 use crate::context::Context;
 use crate::token;
 use crate::token::Token;
+use crate::jason_errors;
 use std::collections::HashMap;
 
 
@@ -16,11 +17,7 @@ impl Template {
         Self { arguments, block }
     }
 
-    pub fn arguments_count(&self) -> usize {
-        self.arguments.len()
-    }
-
-    pub fn resolve(&self, context: &mut Context, arguments: token::Args) -> Option<serde_json::Value> {
+    pub fn resolve(&self, context: &mut Context, arguments: token::Args) -> jason_errors::JasonResult<Option<serde_json::Value>> {
         // Build map of parameter name -> argument value
         let args: HashMap<String, serde_json::Value> = self
             .arguments
@@ -30,11 +27,11 @@ impl Template {
                 arguments
                     .into_iter()
                     .flatten()
-                    .map(|tok| context.to_json(&ASTNode::new(tok))),
+                    .map(|tok| context.to_json(&ASTNode::new(tok)))
+                    .collect::<jason_errors::JasonResult<Vec<_>>>()? // Collect Results first
             )
             .filter_map(|(k, v)| v.map(|val| (k, val)))
             .collect();
-
         // Save original variable state for keys we're overwriting
         let mut old_values = HashMap::new();
         for key in args.keys() {

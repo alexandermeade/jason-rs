@@ -1,56 +1,111 @@
-use std::{fs, error};
-use serde_json::Value;
-use crate::{context::Context, lexer, parser};
+use crate::jason_hidden::{compile_jason_from_src, compile_jason_from_file};
 use crate::lua_instance::LuaInstance;
+use crate::jason_errors::{JasonError};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub fn jason_context_from_file(file_path: String, lua: Rc<RefCell<LuaInstance>>) -> Result<Context, Box<dyn error::Error>> {
-    match fs::metadata(file_path.clone()) {
-        Ok(_) => {},
-        Err(e) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                return Err(format!("Path does not exist. {}", file_path).into());
-            } else {
+pub type CompilerResult<T> = Result<T, JasonError>;
 
-                return Err(e.into());
-            }
-        }
-    }
+/// Builder for constructing Jason parsing with optional Lua dependencies.
+pub struct JasonBuilder {
+    lua_src: String,
+}
 
-    let src = fs::read_to_string(file_path.clone()).unwrap();    
-    let toks = lexer::Lexer::start(src);
-
-    let nodes = parser::Parser::start(toks);
-        
-    let mut context = Context::new(file_path, lua)?;
-
-    for (_i, node) in nodes.iter().enumerate() {
-        context.to_json(&node);
-    }
+impl JasonBuilder {
     
-    Ok(context) 
-}
-
-fn compile_jason_from_file(file_path: &str, lua:Rc<RefCell<LuaInstance>>) -> Result<serde_json::Value, Box<dyn error::Error>> { 
-    match fs::metadata(file_path) {
-        Ok(_) => {},
-        Err(e) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                return Err(format!("Path does not exist. {}", file_path).into());
-            } else {
-
-                return Err(e.into());
-            }
-        }
+    /// Creates a new JasonBuilder with no Lua dependencies.
+    ///
+    /// # Example
+    /// ```
+    /// use jason_rs::JasonBuilder;
+    /// let builder = JasonBuilder::new();
+    /// ```
+    pub fn new() -> Self {
+        JasonBuilder { lua_src: String::new() }   
     }
 
-    let context = jason_context_from_file(file_path.into(), lua).unwrap();
-    Ok(context.out)
+    /// Includes a Lua file as a dependency for `.jason` parsing.
+    ///
+    /// # Arguments
+    /// * `file_path` - Path to the Lua file to include.
+    ///
+    /// # Errors
+    /// Returns an error if reading the Lua file fails.
+    ///
+    /// # Example
+    /// ```
+    /// use jason_rs::JasonBuilder;
+    /// let builder = JasonBuilder::new().include_lua_file("scripts/helpers.lua").unwrap();
+    /// ```
+    pub fn include_lua_file(mut self, file_path: &'static str) -> CompilerResult<JasonBuilder> {
+        let src = std::fs::read_to_string(file_path);
+        if !src.is_ok() {
+            return Err(JasonError::new(crate::jason_errors::JasonErrorKind::FileError, None, format!("failed to read from file {}", file_path)));
+        }
+        let src = src.unwrap(); 
+        self.lua_src.push_str(&src); 
+        Ok(self)
+    }
+
+    /// Includes raw Lua source code as a dependency for `.jason` parsing.
+    ///
+    /// # Arguments
+    /// * `src` - Lua source code as a string.
+    ///
+    /// # Example
+    /// ```
+    /// use jason_rs::JasonBuilder;
+    /// let lua_code = r#"function add(a,b) return a+b end"#;
+    /// let builder = JasonBuilder::new().include_lua(lua_code).unwrap();
+    /// ```
+    pub fn include_lua(mut self, src: &'static str) -> CompilerResult<JasonBuilder> {
+        self.lua_src.push_str(&src); 
+        Ok(self)
+    }
+
+    /// Converts a `.jason` file into a JSON value using the Lua dependencies included in the builder.
+    ///
+    /// # Arguments
+    /// * `file_path` - Path to the `.jason` file.
+    ///
+    /// # Errors
+    /// Returns an error if reading or parsing the `.jason` file fails.
+    ///
+    /// # Example
+    /// ```
+    /// use jason_rs::JasonBuilder;
+    /// let json = JasonBuilder::new().jason_to_json("Page.jason").unwrap();
+    /// println!("{}", json);
+    /// ```
+    pub fn jason_to_json(self, file_path: &str) -> CompilerResult<serde_json::Value> {
+        let lua = Rc::new(RefCell::new(LuaInstance::new_with_src(self.lua_src)?));
+        let json = compile_jason_from_file(file_path, lua)?;
+        Ok(json)
+    }
+
+    /// Converts raw `.jason` source into a JSON value using the Lua dependencies included in the builder.
+    ///
+    /// # Arguments
+    /// * `src` - `.jason` source code as a string.
+    ///
+    /// # Errors
+    /// Returns an error if parsing fails.
+    ///
+    /// # Example
+    /// ```
+    /// use jason_rs::JasonBuilder;
+    /// let src = r#"out {name: "alex", age: 20}"#;
+    /// let json = JasonBuilder::new().jason_src_to_json(src).unwrap();
+    /// println!("{}", json);
+    /// ```
+    pub fn jason_src_to_json(self, src: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+        let lua = Rc::new(RefCell::new(LuaInstance::new_with_src(self.lua_src)?));
+        let json = compile_jason_from_src(src, lua).unwrap();
+        Ok(json)
+    }
 }
 
-
-/// Converts a `.jason` file into pretty JSON.
+/// Converts a `.jason` file into JSON using a default Lua environment.
 ///
 /// # Arguments
 /// * `file_path` - Path to the `.jason` file.
@@ -61,73 +116,33 @@ fn compile_jason_from_file(file_path: &str, lua:Rc<RefCell<LuaInstance>>) -> Res
 /// # Example
 /// ```
 /// use jason_rs::jason_to_json;
-/// let json_text = jason_to_json("Page.jason").unwrap();
-/// println!("{}", json_text);
+/// let json = jason_to_json("Page.jason").unwrap();
+/// println!("{}", json);
 /// ```
 pub fn jason_to_json(file_path: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    // Create Lua state with limited standard libraries
     let lua = Rc::new(RefCell::new(LuaInstance::new()?));
     let json = compile_jason_from_file(file_path, lua).unwrap();
     Ok(json)
-    //prettify_json(&src) 
 }
 
-
-/// Converts a `.jason` file into YAML.
-/// 
-/// # Caution
-/// Has yet to be fully tested!
+/// Converts raw `.jason` source into JSON using a default Lua environment.
 ///
 /// # Arguments
-/// * `file_path` - Path to the `.jason` file.
+/// * `src` - `.jason` source code as a string.
 ///
 /// # Errors
-/// Returns an error if reading or parsing fails.
+/// Returns an error if parsing fails.
 ///
 /// # Example
 /// ```
-/// use jason_rs::jason_to_yaml;
-/// let yaml_text = jason_to_yaml("Page.jason").unwrap();
-/// println!("{}", yaml_text);
+/// use jason_rs::jason_src_to_json;
+/// let src = r#"out {name: "alex", age: 20}"#;
+/// let json = jason_src_to_json(src).unwrap();
+/// println!("{}", json);
 /// ```
-pub fn jason_to_yaml(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
-
+pub fn jason_src_to_json(src: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let lua = Rc::new(RefCell::new(LuaInstance::new()?));
-    let json = compile_jason_from_file(file_path, lua)?;
-        
-    let yaml_string = serde_yaml::to_string(&json)?;
-    
-    Ok(yaml_string)
-}
-
-
-/// Converts a `.jason` file into TOML.
-///
-/// # Caution
-/// This may break due to jason not preforming type checking on produced toml and has yet to be tested!
-///
-/// # Arguments
-/// * `file_path` - Path to the `.jason` file.
-///
-/// # Errors
-/// Returns an error if reading or parsing fails.
-///
-/// # Example
-/// ```
-/// use jason_rs::jason_to_toml;
-/// let toml_text = jason_to_toml("Page.jason").unwrap();
-/// println!("{}", toml_text);
-/// ```
-///
-pub fn jason_to_toml(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
-
-    let lua = Rc::new(RefCell::new(LuaInstance::new()?));
-    let json = compile_jason_from_file(file_path, lua)?;
-
-    let parsed: Value = json;
-    
-    let toml_string = toml::to_string(&parsed)?;
-    
-    Ok(toml_string)
+    let json = compile_jason_from_src(src, lua).unwrap();
+    Ok(json)
 }
 

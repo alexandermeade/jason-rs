@@ -21,6 +21,7 @@ pub enum JasonErrorKind {
     Bundle(Vec<JasonError>),
     ImportError,
     LuaError,
+    UndefinedTemplate(String),
     LuaFnError(String),
     LexerError(String),
 }
@@ -147,6 +148,7 @@ impl JasonError {
             JasonErrorKind::MissingValue => "Missing Value",
             JasonErrorKind::MissingKey => "Missing Key",
             JasonErrorKind::LexerError(_) => "Lexer Error",
+            JasonErrorKind::UndefinedTemplate(_) => "Undefined Template",
             JasonErrorKind::LuaFnError(_) => "Lua Function Error"
         }
     }
@@ -196,7 +198,8 @@ impl std::fmt::Display for JasonError {
                     println!("{:>5}", highlight_string(&code_line, "*ALL*"));
                 },
 
-                JasonErrorKind::UndefinedVariable(var) => {
+                JasonErrorKind::UndefinedVariable(var) |
+                JasonErrorKind::UndefinedTemplate(var) => {
                     println!("{:>5}", highlight_string(&code_line, &var));
                 },
                 JasonErrorKind::LuaFnError(fn_name) => {

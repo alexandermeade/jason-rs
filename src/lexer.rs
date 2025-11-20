@@ -212,6 +212,7 @@ impl Lexer {
         } 
         return tokens;
     }*/
+    #[allow(dead_code, unused_variables)]
     pub fn collect_toks_between(&mut self, open_tok: TokenType, closed_tok: TokenType) -> Result<Vec<Token>, Token> {
         let start_row = self.row;
         let start_col = self.colmn;
@@ -229,7 +230,7 @@ impl Lexer {
             if self.curr_char == '\0' {
                 return Err(self.new_token(
                     TokenType::ERR(format!(
-                        "Unclosed '{}' opened at {}:{}\n  --> {}",
+                        "Unclosed '{}' opened at {}:{}\n |{}",
                         open_char, start_row, start_col,
                         line_content.trim_end(), 
                     )),
@@ -518,7 +519,7 @@ impl Lexer {
                 if let TokenType::ERR(err_msg) = &tok.token_type {
                     Some(JasonError::new(
                         JasonErrorKind::LexerError(err_msg.clone()),  // Use the actual error message
-                        file.clone(),
+                        lexer.file.clone(),
                         None,
                         format!("Lexer error at {}:{}", tok.row, tok.colmn)
                     ))
@@ -531,7 +532,7 @@ impl Lexer {
         if !errs.is_empty() {
             return Err(JasonError::new(
                 JasonErrorKind::Bundle(errs),
-                file,
+                lexer.file.clone(),
                 None,
                 "Lexer errors"
             ));

@@ -321,7 +321,7 @@ impl Context {
             TokenType::LuaFnCall(_) => self.eval_lua_fn(node),
             TokenType::FnCall(args) => { 
                 if !self.templates.contains_key(&node.token.plain()) {
-                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()), self.source_path.clone(), self.local_root.clone(), format!("the template {} does not exist in file {}", node.token.plain(), self.source_path)));
+                    return Err(JasonError::new(JasonErrorKind::UndefinedTemplate(node.token.plain()), self.source_path.clone(), self.local_root.clone(), format!("the template {} does not exist in file {}", node.token.plain(), self.source_path)));
                 }
                 let template = self.templates.get(&node.token.plain()).unwrap().clone();
                 template.resolve(self, args.to_vec())

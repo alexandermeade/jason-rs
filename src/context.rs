@@ -21,7 +21,7 @@ pub struct Context {
     pub variables: HashMap<String, serde_json::Value>,
     pub templates: HashMap<String, Template>,
     pub out: serde_json::Value,
-    pub source_path: String,
+    pub source_path: Rc<String>,
     pub lua_instance: Rc<RefCell<LuaInstance>>,
     pub lua_env: Table,
     pub lua_fn_cache: HashMap<String, mlua::RegistryKey>, // cache lua functions
@@ -29,7 +29,7 @@ pub struct Context {
 }
 
 impl Context {    
-    pub fn new(path: String, lua_instance: Rc<RefCell<LuaInstance>>) -> JasonResult<Self> {
+    pub fn new(path: Rc<String>, lua_instance: Rc<RefCell<LuaInstance>>) -> JasonResult<Self> {
         let lua_env = {
             let lua_borrow = lua_instance.borrow();
             let lua_ref = &lua_borrow.lua_instance;
@@ -65,12 +65,12 @@ impl Context {
 
     fn repeat_value(&mut self, count: String, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let count = count.parse::<f64>().map_err(|_| 
-            JasonError::new(JasonErrorKind::ParseError, self.local_root.clone(), format!("failed to parse num {}", count)))?;
+            JasonError::new(JasonErrorKind::ParseError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse num {}", count)))?;
         let bound:usize = count as usize;
         let mut result: Vec<Value> = Vec::with_capacity(bound);
         for _ in 0..bound{
             let value = self.to_json(repeated_node)?.ok_or_else(||
-                JasonError::new(JasonErrorKind::ValueError, self.local_root.clone(),"value is None"))?;
+                JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"value is None"))?;
             result.push(value);
         }
         return Ok(Some(Value::Array(result)));
@@ -95,27 +95,28 @@ impl Context {
                 }
                 // Right-sided: n * expression
                 (TokenType::NumberLiteral(num), _) => {
-                    return self.repeat_value(num.clone(), &left_node);
+                    return self.repeat_value(num.clone(), &right_node);
                 }
-                _ => return Err(JasonError::new(JasonErrorKind::InvalidOperation, self.local_root.clone(), 
+                _ => return Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(), 
                     "invalid operation"))
             }
         }
-        Err(JasonError::new(JasonErrorKind::MissingValue, None,
-            format!("Repeat failed {:?}", node)))
+        Err(JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(), self.local_root.clone(),
+            format!("repeat statement failed")))
     }
+
     pub fn eval_equal(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
             let left = &left_node;
             let right = &right_node;
             if left.token.token_type != TokenType::ID {
-                return Err(JasonError::new(JasonErrorKind::SyntaxError,None,
+                return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                     format!("[ERROR] {} = {}, variable name must be a valid identifier!",
                         left.token.plain(),
                         right.token.plain())));
             }
             let right_value = self.to_json(right)?.ok_or_else(||
-                JasonError::new(JasonErrorKind::ValueError, None,"right value is None"))?;
+                JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), None,"right value is None"))?;
             self.variables.insert(left.token.plain(), right_value);             
         }
         Ok(None)
@@ -132,16 +133,23 @@ impl Context {
                 TokenType::ID => {
                     lua_import_path = right_node.token.plain();
                 },
-                _ => return Err(JasonError::new(JasonErrorKind::SyntaxError,None,
+                _ => return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                     "[ERROR] from statement must have a string path\n ... from \"<Path>\"")),
             }
             match left_node.token.token_type.clone() {
                 TokenType::Import(args) =>  { 
                     if import_path == "" {
-                        return Err(JasonError::new(JasonErrorKind::SyntaxError,None,
+                        return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                             "to import templates/variable you must import from a string path I.E. import(...) from \"path/to/file\""));
                     }
-                    let context = jason_hidden::jason_context_from_file(import_path.clone(), self.lua_instance.clone())?;
+                    let context = match jason_hidden::jason_context_from_file(import_path.clone(), self.lua_instance.clone()) {
+                        Ok(v) => Ok(v),
+                        Err(mut err) => {
+                            err.file = self.source_path.clone();
+                            err.node = self.local_root.clone();
+                            Err(err)
+                        },
+                    }?;
                     let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();
                     if args.contains(&"*".to_string()) {
                         let exports = context.export_all();
@@ -154,7 +162,7 @@ impl Context {
                 }
                 TokenType::Use(args) => {
                     if lua_import_path == "" {
-                        return Err(JasonError::new(JasonErrorKind::SyntaxError,None,
+                        return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), None,
                             "to import lua functions you must derive from a plain component I.E. use(...) from std\n note how std std is plain text and not in qoutes"));
                     }
                     let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();                                     
@@ -166,7 +174,7 @@ impl Context {
                     } 
                     return Ok(None); 
                 },
-                _ => return Err(JasonError::new(JasonErrorKind::SyntaxError,None,
+                _ => return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(),None,
                     "[ERROR] from statement must have a string path\n ... from \"<Path>\"")),
             }
         }
@@ -180,7 +188,7 @@ impl Context {
                 .iter()
                 .map(|node| {
                     self.to_json(node)?
-                        .ok_or_else(|| JasonError::new(JasonErrorKind::ValueError,None, "Argument is Empty"))
+                        .ok_or_else(|| JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), None, "Argument is Empty"))
                 })
                 .collect::<JasonResult<Vec<Value>>>()?;
             // Now borrow lua
@@ -201,7 +209,7 @@ impl Context {
                     .load(&fn_tok.plain())
                     .set_environment(self.lua_env.clone())
                     .eval()
-                    .map_err(|e| JasonError::new(JasonErrorKind::LuaFnError(fn_tok.pretty()), Some(self.local_root.clone().expect("This should NOT be none")), format!("failed to find function {}: {}", fn_tok.plain(), e)))?;
+                    .map_err(|e| JasonError::new(JasonErrorKind::LuaFnError(fn_tok.pretty()), self.source_path.clone(), self.local_root.clone(), format!("failed to find function {}: {}", fn_tok.plain(), e)))?;
                 
                 // Store in registry for reuse
                 let key = lua.lua_instance.create_registry_value(func.clone())?;
@@ -221,17 +229,17 @@ impl Context {
             };
             return Ok(Some(json_value));
         }
-        Err(JasonError::new(JasonErrorKind::TypeError,None,
+        Err(JasonError::new(JasonErrorKind::TypeError, self.source_path.clone(), None,
             "at eval_lua_fn token is not of luafncall"))
     }
     
     pub fn eval_plus(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let left = self.to_json(node.left.as_ref().ok_or_else(||
-            JasonError::new(JasonErrorKind::MissingValue, self.local_root.clone(), "left side of the expression is missing"))?)?.ok_or_else(||
-            JasonError::new(JasonErrorKind::ValueError,self.local_root.clone(), "left value is None"))?;
+            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), "left side of the expression is missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
         let right = self.to_json(node.right.as_ref().ok_or_else(||
-            JasonError::new(JasonErrorKind::MissingValue,self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
-            JasonError::new(JasonErrorKind::ValueError,self.local_root.clone(), "right value is None"))?;
+            JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError,self.source_path.clone(), self.local_root.clone(), "right value is None"))?;
         
         match (left, right) {
             //[] + [] => [1,2,3] + [4,5] = [1,2,3,4,5]
@@ -248,19 +256,20 @@ impl Context {
                 a.extend(b);
                 Ok(Some(Value::Object(a)))
             }
-            other => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.local_root.clone(),
+            other => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
                 format!("invalid + operation for values {:?}", other))),
         }
     }
 
     pub fn to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         match &node.token.token_type {
+            TokenType::Null => Ok(Some(serde_json::Value::Null)),
             TokenType::Mult => self.eval_mult(node),
             TokenType::Plus => self.eval_plus(node),
             TokenType::ID => {
                 if !self.variables.contains_key(&node.token.plain()) {
-                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()) ,self.local_root.clone(),
-                        format!("the variable {} does not exist in file {}", node.token.plain(), self.source_path)));
+                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()), self.source_path.clone(),self.local_root.clone(),
+                        format!("the variable {} does not exist in file {}", node.token.plain(), self.source_path.clone())));
                 }
                 Ok(Some(self.variables.get(&node.token.plain()).unwrap().clone()))
             },
@@ -268,13 +277,13 @@ impl Context {
                 Ok(Some(serde_json::Value::Bool(value.clone())))
             },
             TokenType::Block(_) => Ok(Some(self.block_to_json(node)?.ok_or_else(||
-                JasonError::new(JasonErrorKind::ValueError, None,"block returned None"))?)),
+                JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"block returned None"))?)),
             TokenType::NumberLiteral(num) => {
                 let parsed = num.parse::<f64>().map_err(|_|
-                    JasonError::new(JasonErrorKind::ParseError,None, format!("failed to parse number: {}", num)))?;
+                    JasonError::new(JasonErrorKind::ParseError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse number: {}", num)))?;
                 Ok(Some(serde_json::Value::Number(Number::from_f64(parsed).ok_or_else(||
-                    JasonError::new(JasonErrorKind::ConversionError,None, 
-                        format!("broke here: {:#?}", node)))?)))
+                    JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), 
+                        format!("Failed to convert number")))?)))
             },
             TokenType::Equals => self.eval_equal(node),
             TokenType::StringLiteral(s) => Ok(Some(serde_json::Value::String(s.to_string()))), 
@@ -283,7 +292,7 @@ impl Context {
                     .iter()
                     .map(|node| {
                         self.to_json(node)?
-                            .ok_or_else(|| JasonError::new(jason_errors::JasonErrorKind::ValueError,None, "List item is None"))
+                            .ok_or_else(|| JasonError::new(jason_errors::JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(), "List item is None"))
                     })
                     .collect::<JasonResult<Vec<Value>>>()?;                
                 Ok(Some(Value::Array(json_values)))
@@ -292,10 +301,10 @@ impl Context {
             TokenType::Out => {
                 if let Some(right_node) = node.right.as_ref() {
                     self.out = self.to_json(right_node)?.ok_or_else(||
-                        JasonError::new(JasonErrorKind::ValueError, Some(node.clone().into()), "out value is None"))?;
+                        JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(), "out value is None"))?;
                     return Ok(None);
                 }
-                Err(JasonError::new(JasonErrorKind::SyntaxError, Some(node.clone().into()),
+                Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                     "out statement must have valid jason expression.\n example: out \"Hello!\""))
             },
             TokenType::TemplateDef(args, block) => {
@@ -312,14 +321,13 @@ impl Context {
             TokenType::LuaFnCall(_) => self.eval_lua_fn(node),
             TokenType::FnCall(args) => { 
                 if !self.templates.contains_key(&node.token.plain()) {
-                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()),None,
-                        format!("the template {} does not exist in file {}", node.token.plain(), self.source_path)));
+                    return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()), self.source_path.clone(), self.local_root.clone(), format!("the template {} does not exist in file {}", node.token.plain(), self.source_path)));
                 }
                 let template = self.templates.get(&node.token.plain()).unwrap().clone();
                 template.resolve(self, args.to_vec())
             },
             token => {
-                Err(JasonError::new(JasonErrorKind::SyntaxError,None,
+                Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                     format!("Unknown token: {:?}", token)))
             }
         }
@@ -355,25 +363,25 @@ impl Context {
             for node in nodes {
                 if node.token.token_type == TokenType::Colon {
                     let key_node = node.left.as_ref().ok_or_else(||
-                        JasonError::new(JasonErrorKind::MissingKey, Some(node.clone().into()), "Missing key"))?;
+                        JasonError::new(JasonErrorKind::MissingKey, self.source_path.clone(), self.local_root.clone(), "Missing key"))?;
                     let value_node = node.right.as_ref().ok_or_else(||
-                        JasonError::new(JasonErrorKind::MissingValue, Some(node.clone().into()), "Missing value"))?;
+                        JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(), self.local_root.clone(), "Missing value"))?;
                     if key_node.token.token_type != TokenType::ID {
-                        return Err(JasonError::new(JasonErrorKind::SyntaxError,
-                            Some(node.clone().into()), "Key must be an ID"));
+                        return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(),
+                            self.local_root.clone(), "Key must be an ID"));
                     }
                     let key = key_node.token.plain();
                     let value = self.to_json(&*value_node)?; // recursive call
                     map.insert(key, value.ok_or_else(||
-                        JasonError::new(JasonErrorKind::ValueError, None, "block value is None"))?);
+                        JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(), "block value is None"))?);
                     continue;
                 }
-                return Err(JasonError::new(JasonErrorKind::SyntaxError, None,
+                return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                     "values must adheere to <key : value> fields in blocks"));
             }
             Ok(Some(Value::Object(map)))
         } else {
-            Err(JasonError::new(JasonErrorKind::TypeError, None,
+            Err(JasonError::new(JasonErrorKind::TypeError, self.source_path.clone(), self.local_root.clone(),
                 "block_to_json called on non-block token"))
         }
     }
@@ -404,7 +412,7 @@ impl Context {
                 continue;
             }
             //make this return a jason error
-            panic!("{} is not exported from file {}", arg, self.source_path);
+            panic!("{} is not exported from file {}", arg, self.source_path.clone());
         }
         exported_values
     }

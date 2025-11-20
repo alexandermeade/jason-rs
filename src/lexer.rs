@@ -1,8 +1,11 @@
-use crate::{token, token::{TokenType, Token}};
+use crate::{jason_errors::JasonError, jason_errors::JasonErrorKind, token::{self, Token, TokenType}};
 use log::{info};
+use crate::jason::CompilerResult;
+use std::rc::Rc;
 
 pub struct Lexer {
     contents: String,
+    file: Rc<String>,
     tokens: Vec<token::Token>,
     char_index: usize,      // Character position (for chars().nth()) :<
     byte_index: usize,      // Byte position (for slicing) :3
@@ -131,7 +134,7 @@ impl Lexer {
         
         return self.new_token(
             if is_float {
-                TokenType::FloatLiteral(format!("{}", num_str))
+                TokenType::NumberLiteral(format!("{}", num_str))
             } else {
                 TokenType::NumberLiteral(format!("{}", num_str))
             }, 
@@ -194,7 +197,7 @@ impl Lexer {
         }
         return false;
     }
-    
+    /*
     pub fn collect_toks_between(&mut self, _open_tok: TokenType, closed_tok: TokenType) -> Vec<Token> {
         self.next();
         
@@ -208,8 +211,70 @@ impl Lexer {
             self.next();
         } 
         return tokens;
+    }*/
+    pub fn collect_toks_between(&mut self, open_tok: TokenType, closed_tok: TokenType) -> Result<Vec<Token>, Token> {
+        let start_row = self.row;
+        let start_col = self.colmn;
+        let open_char = open_tok.as_open_delim().unwrap_or('?');
+        
+        // Capture the line where the delimiter was opened
+        let line_content = self.get_line(start_row);
+        
+        self.next();
+        
+        let mut tokens: Vec<Token> = Vec::new();
+        let mut depth = 1;
+        
+        loop {
+            if self.curr_char == '\0' {
+                return Err(self.new_token(
+                    TokenType::ERR(format!(
+                        "Unclosed '{}' opened at {}:{}\n  --> {}",
+                        open_char, start_row, start_col,
+                        line_content.trim_end(), 
+                    )),
+                    "Unclosed delimiter".to_string()
+                ));
+            }
+            
+            let curr_tok = self.lex();
+            
+            if curr_tok.token_type == TokenType::EOF {
+                return Err(self.new_token(
+                    TokenType::ERR(format!(
+                        "Unclosed '{}' opened at {}:{}\n  --> {}",
+                        open_char, start_row, start_col,
+                        line_content.trim_end(),
+                    )),
+                    "Unclosed delimiter".to_string()
+                ));
+            }
+            
+            if curr_tok.token_type.same_delim_type(&open_tok) {
+                depth += 1;
+            } else if curr_tok.token_type.matches_open(&open_tok) {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            
+            tokens.push(curr_tok);
+            self.next();
+        }
+        
+        Ok(tokens)
     }
-    
+
+    /// Get the content of a specific line (1-indexed)
+    fn get_line(&self, line_num: usize) -> String {
+        self.contents
+            .lines()
+            .nth(line_num.saturating_sub(1))
+            .unwrap_or("")
+            .to_string()
+    }
+       
     pub fn lex(&mut self) -> Token {
         match self.curr_char {
             '+' => self.new_token(TokenType::Plus, format!("+")),
@@ -268,14 +333,20 @@ impl Lexer {
                 return self.new_token(TokenType::OpenParen, format!("("));
             },
             '[' => {
-                let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenBracket, TokenType::ClosedBracket);
+                let toks = match self.collect_toks_between(TokenType::OpenBracket, TokenType::ClosedBracket) {
+                    Ok(toks) => toks,
+                    Err(e) => return e
+                };
                 let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                     .map(|slice| slice.to_vec())
                     .collect();
                 return self.new_token(TokenType::List(args), format!("List"));
             },
             '{' => {
-                let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
+                let toks: Vec<Token> = match self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly) {
+                    Ok(toks) => toks,
+                    Err(e) => return e
+                };
                 let mut args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                     .map(|slice| slice.to_vec())
                     .collect();                
@@ -284,7 +355,10 @@ impl Lexer {
             },
             '|' => self.new_token(TokenType::Bar, format!("|")),
             '<' => {
-                let toks: Vec<Token> = self.collect_toks_between(TokenType::LessThan, TokenType::GreaterThan);
+                let toks: Vec<Token> = match self.collect_toks_between(TokenType::LessThan, TokenType::GreaterThan) {
+                    Ok(toks) => toks,
+                    Err(e) => return e
+                };
                 let sides: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Bar)
                     .map(|slice| slice.to_vec())
                     .collect();
@@ -308,7 +382,10 @@ impl Lexer {
                     self.skip_whitespace();
                     match self.curr_char {
                         '(' => {    
-                            let toks: Vec<Token> = self.collect_toks_between(TokenType::OpenParen, TokenType::ClosedParen);
+                            let toks: Vec<Token> = match self.collect_toks_between(TokenType::OpenParen, TokenType::ClosedParen){
+                                Ok(toks) => toks,
+                                Err(e) => return e
+                            };
                             let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                                 .map(|slice| slice.to_vec())
                                 .collect();
@@ -318,7 +395,10 @@ impl Lexer {
                                 return self.new_token(TokenType::LuaFnCall(args), format!("{}", id.plain()));                        
                             }
                             if self.curr_char == '{' {
-                                let inner_toks: Vec<Token> = self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly);
+                                let inner_toks: Vec<Token> = match self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly) {
+                                    Ok(toks) => toks,
+                                    Err(e) => return e
+                                };
                                 let mut inner_args: Vec<Vec<Token>> = inner_toks.split(|tok| tok.token_type == TokenType::Comma)
                                     .map(|slice| slice.to_vec())
                                     .collect();                                           
@@ -342,35 +422,7 @@ impl Lexer {
         }
     }
     
-    pub fn back(&mut self) {
-        if self.char_index <= 0 {
-            return;
-        }
-        self.char_index -= 1;
-        self.curr_char = match self.contents.chars().nth(self.char_index) {
-            Some(c) => c,
-            None => '\0'
-        };
-        
-        // Recalculate byte_index
-        self.byte_index = self.contents.chars()
-            .take(self.char_index)
-            .map(|c| c.len_utf8())
-            .sum();
-    }   
-    
     pub fn next(&mut self) {
-        // Move byte index forward by the byte length of current char
-        if self.curr_char != '\0' {
-            self.byte_index += self.curr_char.len_utf8();
-        }
-        
-        self.char_index += 1;
-        self.curr_char = match self.contents.chars().nth(self.char_index) {
-            Some(c) => c,
-            None => '\0'
-        };
-        
         match self.curr_char {
             '\n' => {
                 self.row += 1;
@@ -379,23 +431,65 @@ impl Lexer {
             '\t' => {
                 self.colmn += 4;
             },
-            ' ' => {
-                self.colmn += 1;
-            },
             '\0' => {},
             _ => {
                 self.colmn += 1;
             },
-        };     
+        }
+        
+        if self.curr_char != '\0' {
+            self.byte_index += self.curr_char.len_utf8();
+        }
+        
+        self.char_index += 1;
+        self.curr_char = self.contents.chars().nth(self.char_index).unwrap_or('\0');
+    }
+
+    pub fn back(&mut self) {
+        if self.char_index == 0 {
+            return;
+        }
+        
+        self.char_index -= 1;
+        self.curr_char = self.contents.chars().nth(self.char_index).unwrap_or('\0');
+        
+        // Recalculate byte_index
+        self.byte_index = self.contents.chars()
+            .take(self.char_index)
+            .map(|c| c.len_utf8())
+            .sum();
+        
+        // Recalculate row and column by scanning from the start
+        // (This is expensive but back() is rarely called)
+        self.row = 1;
+        self.colmn = 1;
+        for (i, ch) in self.contents.chars().enumerate() {
+            if i >= self.char_index {
+                break;
+            }
+            match ch {
+                '\n' => {
+                    self.row += 1;
+                    self.colmn = 1;
+                },
+                '\t' => {
+                    self.colmn += 4;
+                },
+                _ => {
+                    self.colmn += 1;
+                },
+            }
+        }
     }
     
-    pub fn start(contents: String) -> Vec<Token> { 
+    pub fn start(file: Rc<String>, contents: String) -> CompilerResult<Vec<Token>> { 
         if contents.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let mut lexer: Lexer = Lexer {
             contents: contents.clone(),
             tokens: Vec::new(),
+            file: file.clone(),
             char_index: 0,
             byte_index: 0,
             curr_char: contents.chars().nth(0).unwrap(),
@@ -412,8 +506,38 @@ impl Lexer {
                 break;
             }
             lexer.next();
-        } 
+        }
         
-        return lexer.tokens;
+                
+                
+
+        let errs: Vec<JasonError> = lexer
+            .tokens
+            .iter()
+            .filter_map(|tok| {
+                if let TokenType::ERR(err_msg) = &tok.token_type {
+                    Some(JasonError::new(
+                        JasonErrorKind::LexerError(err_msg.clone()),  // Use the actual error message
+                        file.clone(),
+                        None,
+                        format!("Lexer error at {}:{}", tok.row, tok.colmn)
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !errs.is_empty() {
+            return Err(JasonError::new(
+                JasonErrorKind::Bundle(errs),
+                file,
+                None,
+                "Lexer errors"
+            ));
+        }
+
+
+        Ok(lexer.tokens)
     }
 }

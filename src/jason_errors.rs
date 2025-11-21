@@ -158,11 +158,19 @@ impl std::error::Error for JasonError {}
 
 impl From<mlua::Error> for JasonError {
     fn from(err: mlua::Error) -> Self {
+        let message = match &err {
+            mlua::Error::RuntimeError(msg) => format!("Runtime error: {}", msg),
+            mlua::Error::CallbackError { traceback, cause } => {
+                format!("Callback error: {}\nTraceback: {}", cause, traceback)
+            },
+            _ => format!("{:#?}", err),
+        };
+        
         JasonError::new(
             JasonErrorKind::LuaError,
             Rc::new("lua src".to_string()),
             None,
-            format!("Lua error: {}", err),
+            message,
         )
     }
 }
@@ -207,7 +215,11 @@ impl std::fmt::Display for JasonError {
                 },
                 JasonErrorKind::SyntaxError | JasonErrorKind::MissingKey | JasonErrorKind::MissingValue => { 
                     println!("{:>5}", highlight_string(&code_line, "*ALL*"));
-                }
+                },
+
+                JasonErrorKind::InvalidOperation => {
+                    println!("{:>5}", highlight_string(&code_line, "*ALL*"));
+                },
                 _ =>  println!("{:>5}", highlight_string(&code_line, "*ALL*"))
             }
         }

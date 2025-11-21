@@ -53,14 +53,22 @@ impl Parser {
                 if !self.next_insure(TokenType::ClosedParen) {
                     // Ensure we have a closing ')'
                     return ASTNode::new(Token::new(
-                        TokenType::ERR(format!("Expected ')' but not found: {}", self.current().unwrap().plain())),
+                        TokenType::ERR(format!("Expected ')' but not found: {}", token.plain())),
                         "Parse error".to_string(),
-                        0,
-                        0,
+                        token.row,
+                        token.colmn,
                     ));
                 }
                 node
-            }
+            },
+            TokenType::Plus => {
+                 return ASTNode::new(Token::new(
+                    TokenType::ERR(format!("unexpected '+' found {}", token.plain())),
+                    "Parse error".to_string(),
+                    token.row,
+                    token.colmn,
+                ));               
+            },
             _ => { self.next(); ASTNode::new(token)},
         }
     }

@@ -220,8 +220,12 @@ impl Context {
             
             // Call the function with arguments
             let result = 
-                func.call::<mlua::MultiValue>(mlua::MultiValue::from_vec(lua_args))?;
-            // Get the first value from the result
+                func.call::<mlua::MultiValue>(mlua::MultiValue::from_vec(lua_args)).map_err(|e|
+                    JasonError::new(
+                        JasonErrorKind::LuaFnError(fn_tok.pretty()), self.source_path.clone(), self.local_root.clone(), format!("failed to evaluate function {}: {}\n", fn_tok.plain(), e)
+                        )
+                )?;
+                    // Get the first value from the result
             let json_value: serde_json::Value = if let Some(first) = result.into_iter().next() {
                 LuaInstance::lua_value_to_json(&first)
             } else {
@@ -235,7 +239,7 @@ impl Context {
     
     pub fn eval_plus(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let left = self.to_json(node.left.as_ref().ok_or_else(||
-            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), "left side of the expression is missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
             JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
         let right = self.to_json(node.right.as_ref().ok_or_else(||
             JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
@@ -256,8 +260,8 @@ impl Context {
                 a.extend(b);
                 Ok(Some(Value::Object(a)))
             }
-            other => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
-                format!("invalid + operation for values {:?}", other))),
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
+                format!("invalid + operation for values ", ))),
         }
     }
 

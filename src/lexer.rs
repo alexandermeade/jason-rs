@@ -211,6 +211,7 @@ impl Lexer {
     }*/
     #[allow(dead_code, unused_variables)]
     pub fn collect_toks_between(&mut self, open_tok: TokenType, closed_tok: TokenType) -> Result<Vec<Token>, Token> {
+        let start_index = self.char_index;
         let start_row = self.row;
         let start_col = self.colmn;
         let open_char = open_tok.as_open_delim().unwrap_or('?');
@@ -225,6 +226,9 @@ impl Lexer {
         
         loop {
             if self.curr_char == '\0' {
+                while self.char_index != start_index {
+                    self.back();
+                }
                 return Err(self.new_token(
                     TokenType::ERR(format!(
                         "Unclosed '{}' opened at {}:{}\n |{}",

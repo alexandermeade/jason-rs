@@ -180,6 +180,16 @@ result
 ]
 ```
 
+## Errors
+Error outputs are nice and concise and propogate nicly. 
+
+
+Example error
+```
+Error: Lua Function Error in file ./main.jason on line 8: failed to find function random_name: error converting Lua nil to function
+    8 |  out Some(Person(random_name()!, random_int(30)!)) * 50
+                         ^^^^^^^^^^^^^^                        
+```
 ## Syntax Overview
 
 | Syntax | Description |

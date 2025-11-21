@@ -2,6 +2,7 @@
 
 use crate::parser::Parser;
 use crate::astnode::ASTNode;
+use crate::jason_errors::JasonError;
 
 pub type Args = Vec<Vec<Token>>;
 
@@ -76,6 +77,7 @@ pub enum TokenType {
     Embed,
     Use(Args),
     Empty,
+    Null,
     DollarSign,
 }
 
@@ -83,6 +85,7 @@ impl TokenType {
     
     pub fn find_keyword(content:&str) -> TokenType {
         match content {
+            "null" => TokenType::Null,
             "from" => TokenType::From,
             "fn" => TokenType::FN, 
             "let" => TokenType::Let,
@@ -102,6 +105,58 @@ impl TokenType {
             "append" => TokenType::Append,
             "unpack" => TokenType::Unpack,
             _ => TokenType::ID
+        }
+    }
+
+    pub fn as_open_delim(&self) -> Option<char> {
+        match self {
+            TokenType::OpenParen => Some('('),
+            TokenType::OpenBracket => Some('['),
+            TokenType::OpenCurly => Some('{'),
+            TokenType::LessThan => Some('<'),
+            _ => None,
+        }
+    }
+    
+    /// Returns the closing delimiter character, if this is a closing token
+    pub fn as_close_delim(&self) -> Option<char> {
+        match self {
+            TokenType::ClosedParen => Some(')'),
+            TokenType::ClosedBracket => Some(']'),
+            TokenType::ClosedCurly => Some('}'),
+            TokenType::GreaterThan => Some('>'),
+            // These are "parsed" closing tokens (already collected their contents)
+            TokenType::List(_) => Some(']'),
+            TokenType::Block(_) => Some('}'),
+            TokenType::Template(_, _) => Some('>'),
+            _ => None,
+        }
+    }
+    
+    /// Check if this token type matches an opening delimiter (ignoring inner data)
+    pub fn matches_open(&self, open: &TokenType) -> bool {
+        match (open, self) {
+            (TokenType::OpenParen, TokenType::ClosedParen) => true,
+            (TokenType::OpenBracket, TokenType::ClosedBracket) => true,
+            (TokenType::OpenCurly, TokenType::ClosedCurly) => true,
+            (TokenType::LessThan, TokenType::GreaterThan) => true,
+            _ => false,
+        }
+    }
+    
+    /// Check if this is the same delimiter type (ignoring inner data)
+    pub fn same_delim_type(&self, other: &TokenType) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+    
+    /// Returns a display string for error messages
+    pub fn delim_str(&self) -> &'static str {
+        match self {
+            TokenType::OpenParen | TokenType::ClosedParen => "()",
+            TokenType::OpenBracket | TokenType::ClosedBracket | TokenType::List(_) => "[]",
+            TokenType::OpenCurly | TokenType::ClosedCurly | TokenType::Block(_) => "{}",
+            TokenType::LessThan | TokenType::GreaterThan | TokenType::Template(_, _) => "<>",
+            _ => "?",
         }
     }
 
@@ -202,6 +257,7 @@ impl Token {
             TokenType::NumberLiteral(n) => n.clone(),
             TokenType::FloatLiteral(f) => f.clone(),
             TokenType::BoolLiteral(b) => b.to_string(),
+            TokenType::Null => "null".to_string(),
 
             // ===== Identifiers & Paths =====
             TokenType::ID => self.plain.clone(),
@@ -303,7 +359,7 @@ impl Token {
             TokenType::DollarSign => "$".to_string(),
 
             // ===== Error / unknown =====
-            TokenType::ERR(s) => format!("<err: {}>", s),
+            TokenType::ERR(s) => format!("{}", s),
             TokenType::Unknown(c) => c.to_string(),
 
             // ===== Bounds / EOF =====
@@ -318,26 +374,28 @@ impl Token {
 }
 
 pub trait ArgsToNode {
-    fn to_nodes(&self) -> Vec<ASTNode>;
+    fn to_nodes(&self) -> Result<Vec<ASTNode>, JasonError>;
     fn as_string_list(&self) -> String;
     fn as_string_tuple(&self) -> String;
 }
 impl ArgsToNode for Args {
-    fn to_nodes(&self) -> Vec<ASTNode> {
-        // keep for actual parsing use
-        self.iter()
-            .flat_map(|tokens| {
-                let filtered: Vec<Token> = tokens
-                    .iter()
-                    .filter(|token| token.token_type != TokenType::NewLine)
-                    .cloned()
-                    .collect();
+    fn to_nodes(&self) -> Result<Vec<ASTNode>, JasonError> {
+        let mut nodes = Vec::new();
 
-                Parser::start(filtered)
-            })
-            .collect::<Vec<ASTNode>>()
+        for tokens in self.iter() {
+            let filtered: Vec<Token> = tokens
+                .iter()
+                .filter(|token| token.token_type != TokenType::NewLine)
+                .cloned()
+                .collect();
+
+            // Propagate error if parsing fails
+            let mut parsed_nodes = Parser::start("".to_string().into(), filtered)?;
+            nodes.append(&mut parsed_nodes);
+        }
+
+        Ok(nodes)
     }
-
     fn as_string_list(&self) -> String {
         "[".to_string()
             + &self.iter()

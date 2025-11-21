@@ -40,7 +40,7 @@ impl JasonBuilder {
     pub fn include_lua_file(mut self, file_path: &'static str) -> CompilerResult<JasonBuilder> {
         let src = std::fs::read_to_string(file_path);
         if !src.is_ok() {
-            return Err(JasonError::new(crate::jason_errors::JasonErrorKind::FileError, None, format!("failed to read from file {}", file_path)));
+            return Err(JasonError::new(crate::jason_errors::JasonErrorKind::FileError, Rc::new(file_path.to_string()), None, format!("failed to read from file {}", file_path)));
         }
         let src = src.unwrap(); 
         self.lua_src.push_str(&src); 

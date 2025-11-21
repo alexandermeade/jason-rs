@@ -418,7 +418,7 @@ impl Lexer {
                     return self.lex_number();
                 }
                 
-                self.new_token(TokenType::Unknown(c), format!("?Unknown Character?"))
+                self.new_token(TokenType::Unknown(c), format!("{}", c))
             }
         }
     }

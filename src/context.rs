@@ -65,7 +65,7 @@ impl Context {
 
     fn repeat_value(&mut self, count: String, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let count = count.parse::<f64>().map_err(|_| 
-            JasonError::new(JasonErrorKind::ParseError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse num {}", count)))?;
+            JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse num {}", count)))?;
         let bound:usize = count as usize;
         let mut result: Vec<Value> = Vec::with_capacity(bound);
         for _ in 0..bound{
@@ -150,7 +150,7 @@ impl Context {
                             Err(err)
                         },
                     }?;
-                    let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();
+                    let args:Vec<String> = args.to_nodes()?.into_iter().map(|node| node.token.plain()).collect();
                     if args.contains(&"*".to_string()) {
                         let exports = context.export_all();
                         self.absorb_exports(exports);
@@ -165,7 +165,7 @@ impl Context {
                         return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), None,
                             "to import lua functions you must derive from a plain component I.E. use(...) from std\n note how std std is plain text and not in qoutes"));
                     }
-                    let args:Vec<String> = args.to_nodes().into_iter().map(|node| node.token.plain()).collect();                                     
+                    let args:Vec<String> = args.to_nodes()?.into_iter().map(|node| node.token.plain()).collect();                                     
                     for arg in &args {
                         let _ = self.import_from_base(arg);
                     }
@@ -184,7 +184,7 @@ impl Context {
     pub fn eval_lua_fn(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::LuaFnCall(args) = &node.token.token_type {
             // Convert to JSON first
-            let json_values: Vec<Value> = args.to_nodes()
+            let json_values: Vec<Value> = args.to_nodes()?
                 .iter()
                 .map(|node| {
                     self.to_json(node)?
@@ -280,7 +280,7 @@ impl Context {
                 JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"block returned None"))?)),
             TokenType::NumberLiteral(num) => {
                 let parsed = num.parse::<f64>().map_err(|_|
-                    JasonError::new(JasonErrorKind::ParseError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse number: {}", num)))?;
+                    JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse number: {}", num)))?;
                 Ok(Some(serde_json::Value::Number(Number::from_f64(parsed).ok_or_else(||
                     JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), 
                         format!("Failed to convert number")))?)))
@@ -288,7 +288,7 @@ impl Context {
             TokenType::Equals => self.eval_equal(node),
             TokenType::StringLiteral(s) => Ok(Some(serde_json::Value::String(s.to_string()))), 
             TokenType::List(args) => {
-                let json_values: Vec<Value> = args.to_nodes()
+                let json_values: Vec<Value> = args.to_nodes()?
                     .iter()
                     .map(|node| {
                         self.to_json(node)?
@@ -308,7 +308,7 @@ impl Context {
                     "out statement must have valid jason expression.\n example: out \"Hello!\""))
             },
             TokenType::TemplateDef(args, block) => {
-                let args = args.to_nodes();
+                let args = args.to_nodes()?;
                 if args.len() > 0 {
                     let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
                 
@@ -358,7 +358,7 @@ impl Context {
     }
     fn block_to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::Block(args) = &node.token.token_type {
-            let nodes = args.to_nodes();
+            let nodes = args.to_nodes()?;
             let mut map = Map::new(); // this will become our JSON object
             for node in nodes {
                 if node.token.token_type == TokenType::Colon {

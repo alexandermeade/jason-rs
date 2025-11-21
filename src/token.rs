@@ -2,6 +2,7 @@
 
 use crate::parser::Parser;
 use crate::astnode::ASTNode;
+use crate::jason_errors::JasonError;
 
 pub type Args = Vec<Vec<Token>>;
 
@@ -358,7 +359,7 @@ impl Token {
             TokenType::DollarSign => "$".to_string(),
 
             // ===== Error / unknown =====
-            TokenType::ERR(s) => format!("<err: {}>", s),
+            TokenType::ERR(s) => format!("{}", s),
             TokenType::Unknown(c) => c.to_string(),
 
             // ===== Bounds / EOF =====
@@ -373,26 +374,28 @@ impl Token {
 }
 
 pub trait ArgsToNode {
-    fn to_nodes(&self) -> Vec<ASTNode>;
+    fn to_nodes(&self) -> Result<Vec<ASTNode>, JasonError>;
     fn as_string_list(&self) -> String;
     fn as_string_tuple(&self) -> String;
 }
 impl ArgsToNode for Args {
-    fn to_nodes(&self) -> Vec<ASTNode> {
-        // keep for actual parsing use
-        self.iter()
-            .flat_map(|tokens| {
-                let filtered: Vec<Token> = tokens
-                    .iter()
-                    .filter(|token| token.token_type != TokenType::NewLine)
-                    .cloned()
-                    .collect();
+    fn to_nodes(&self) -> Result<Vec<ASTNode>, JasonError> {
+        let mut nodes = Vec::new();
 
-                Parser::start(filtered)
-            })
-            .collect::<Vec<ASTNode>>()
+        for tokens in self.iter() {
+            let filtered: Vec<Token> = tokens
+                .iter()
+                .filter(|token| token.token_type != TokenType::NewLine)
+                .cloned()
+                .collect();
+
+            // Propagate error if parsing fails
+            let mut parsed_nodes = Parser::start("".to_string().into(), filtered)?;
+            nodes.append(&mut parsed_nodes);
+        }
+
+        Ok(nodes)
     }
-
     fn as_string_list(&self) -> String {
         "[".to_string()
             + &self.iter()

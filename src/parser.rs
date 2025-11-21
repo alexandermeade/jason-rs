@@ -1,6 +1,9 @@
+use crate::jason_errors::JasonError;
+use crate::jason_errors::JasonErrorKind;
 use crate::token::Token;
 use crate::token::TokenType;
 use crate::astnode::ASTNode;
+use std::rc::Rc;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -16,12 +19,14 @@ impl Parser {
         self.index += 1;
     }
     
-    fn next_insure(&mut self, token_type: TokenType) {
+    fn next_insure(&mut self, token_type: TokenType) -> bool {
         let tok_type = &self.current().unwrap().token_type;
         if *tok_type != token_type {
-            panic!("{:?} doesn't match {:?}", tok_type, token_type); 
+            //panic!("{:?} doesn't match {:?}", tok_type, token_type); 
+            return false;
         }
         self.index += 1;
+        return true;
     }
     
     fn factor(&mut self) -> ASTNode {
@@ -45,7 +50,15 @@ impl Parser {
             TokenType::OpenParen => {
                 self.next_insure(TokenType::OpenParen);
                 let node = self.expr();
-                self.next_insure(TokenType::ClosedParen);
+                if !self.next_insure(TokenType::ClosedParen) {
+                    // Ensure we have a closing ')'
+                    return ASTNode::new(Token::new(
+                        TokenType::ERR(format!("Expected ')' but not found: {}", self.current().unwrap().plain())),
+                        "Parse error".to_string(),
+                        0,
+                        0,
+                    ));
+                }
                 node
             }
             _ => { self.next(); ASTNode::new(token)},
@@ -121,19 +134,39 @@ impl Parser {
         node
     }
     
-    pub fn start(tokens: Vec<Token>) -> Vec<ASTNode> {
+    pub fn start(file_path: Rc<String>, tokens: Vec<Token>) -> Result<Vec<ASTNode>, JasonError> {
         let mut parser = Parser {
             tokens,
             index: 0
         };
         let mut nodes: Vec<ASTNode> = Vec::new();
+        let mut errs: Vec<ASTNode> = Vec::new();
         loop {
             let node = parser.expr();
             if node.token.token_type == TokenType::EOT {
                 break;
             }   
+            
+            if matches!(node.token.token_type, TokenType::ERR(_)) {
+                errs.push(node);
+                continue;
+            }
             nodes.push(node);
-        }         
-        return nodes
+        }  
+        let errs:Vec<JasonError> = errs.iter().map(|err| 
+            JasonError::new(JasonErrorKind::ParseError(err.token.plain()), file_path.clone(), None, "Parser Error")
+        ).collect();
+
+        if errs.len() > 0 {
+            return Err(JasonError::new(
+                JasonErrorKind::Bundle(
+                    errs
+                ), 
+                file_path.clone(),
+                None, 
+                "Parser Error".to_string()
+            ));
+        }
+        return Ok(nodes);
     }
 }

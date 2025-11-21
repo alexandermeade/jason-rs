@@ -5,7 +5,7 @@ use unicode_width::UnicodeWidthChar;
 
 #[derive(Debug)]
 pub enum JasonErrorKind {
-    ParseError,
+    ParseError(String),
     SyntaxError,
     MissingValue,
     MissingKey,
@@ -131,7 +131,7 @@ impl JasonError {
     
     fn kind_str(&self) -> &str {
         match &self.kind {
-            JasonErrorKind::ParseError => "Parse Error",
+            JasonErrorKind::ParseError(_) => "Parse Error",
             JasonErrorKind::SyntaxError => "Syntax Error",
             JasonErrorKind::ValueError => "Value Error",
             JasonErrorKind::TypeError => "Type Error",
@@ -208,7 +208,7 @@ impl std::fmt::Display for JasonError {
                 JasonErrorKind::SyntaxError | JasonErrorKind::MissingKey | JasonErrorKind::MissingValue => { 
                     println!("{:>5}", highlight_string(&code_line, "*ALL*"));
                 }
-                _ => {}
+                _ =>  println!("{:>5}", highlight_string(&code_line, "*ALL*"))
             }
         }
         

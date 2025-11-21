@@ -1,5 +1,4 @@
 use crate::{jason_errors::JasonError, jason_errors::JasonErrorKind, token::{self, Token, TokenType}};
-use log::{info};
 use crate::jason::CompilerResult;
 use std::rc::Rc;
 
@@ -116,9 +115,7 @@ impl Lexer {
                 is_float = true;
             }
             self.next();
-            info!("[index: {}], {}", self.char_index, self.curr_char);
         }
-        info!("start: {}, index: {}", start_byte, self.byte_index);
         
         if self.byte_index >= self.contents.len() {
             return self.new_token(

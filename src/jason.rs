@@ -56,7 +56,7 @@ impl JasonBuilder {
     /// ```
     /// use jason_rs::JasonBuilder;
     /// let lua_code = r#"function add(a,b) return a+b end"#;
-    /// let builder = JasonBuilder::new().include_lua(lua_code).unwrap();
+    /// let builder = JasonBuilder::new().include_lua(lua_code)?;
     /// ```
     pub fn include_lua(mut self, src: &'static str) -> CompilerResult<JasonBuilder> {
         self.lua_src.push_str(&src); 
@@ -95,12 +95,12 @@ impl JasonBuilder {
     /// ```
     /// use jason_rs::JasonBuilder;
     /// let src = r#"out {name: "alex", age: 20}"#;
-    /// let json = JasonBuilder::new().jason_src_to_json(src).unwrap();
+    /// let json = JasonBuilder::new().jason_src_to_json(src)?;
     /// println!("{}", json);
     /// ```
     pub fn jason_src_to_json(self, src: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         let lua = Rc::new(RefCell::new(LuaInstance::new_with_src(self.lua_src)?));
-        let json = compile_jason_from_src(src, lua).unwrap();
+        let json = compile_jason_from_src(src, lua)?;
         Ok(json)
     }
 }
@@ -116,12 +116,12 @@ impl JasonBuilder {
 /// # Example
 /// ```
 /// use jason_rs::jason_to_json;
-/// let json = jason_to_json("Page.jason").unwrap();
+/// let json = jason_to_json("Page.jason")?;
 /// println!("{}", json);
 /// ```
 pub fn jason_to_json(file_path: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let lua = Rc::new(RefCell::new(LuaInstance::new()?));
-    let json = compile_jason_from_file(file_path, lua).unwrap();
+    let json = compile_jason_from_file(file_path, lua)?;
     Ok(json)
 }
 
@@ -142,7 +142,7 @@ pub fn jason_to_json(file_path: &str) -> Result<serde_json::Value, Box<dyn std::
 /// ```
 pub fn jason_src_to_json(src: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let lua = Rc::new(RefCell::new(LuaInstance::new()?));
-    let json = compile_jason_from_src(src, lua).unwrap();
+    let json = compile_jason_from_src(src, lua)?;
     Ok(json)
 }
 

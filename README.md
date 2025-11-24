@@ -78,6 +78,9 @@ import(Dev) from "./Dev.jason"
 out Dev("alex", "jason-rs", 0) 
 ```
 
+note: this will not import the context around DEV so variables will be ignored unless imported as well. 
+this warning will be patched in a later version with groups.
+
 ## * operator
 The * operator repeats an expression an integer number of times and then stores it in a list.
 
@@ -99,9 +102,6 @@ result = pick(main)!*12
 //out the result
 out result
 ```
-
-note: this will not import the context around DEV so variables will be ignored unless imported as well. 
-this warning will be patched in a later version with groups.
 
 ## JasonBuilder
 

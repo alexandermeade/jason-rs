@@ -1,6 +1,6 @@
 [package]
 name = "jason-rs"
-version = "0.2.19"
+version = "0.2.20"
 edition = "2021"
 authors = ["Alexander Meade <thisguys348@gmail.com>"]
 description = "A library for parsing Jason-like files into JSON, YAML, or TOML with support for inline file expansion."
@@ -30,7 +30,7 @@ mlua = { version = "0.10", default-features = false, features = ["serialize"] }
 default = ["luajit"]
 
 # Standard Lua 5.4 backend
-lua = ["mlua/lua54"]
+lua54 = ["mlua/lua54"]
 
 # LuaJIT backend
 luajit = ["mlua/luajit"]

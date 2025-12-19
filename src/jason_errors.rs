@@ -24,6 +24,7 @@ pub enum JasonErrorKind {
     UndefinedTemplate(String),
     LuaFnError(String),
     LexerError(String),
+    IndexError,
 }
 
 pub struct JasonError {
@@ -33,7 +34,6 @@ pub struct JasonError {
     pub context: Vec<String>,
     pub file: Rc<String>,
 }
-
 
 fn highlight_string(text: &str, target: &str) -> String {
     if target.is_empty() || !text.contains(target) {
@@ -149,7 +149,8 @@ impl JasonError {
             JasonErrorKind::MissingKey => "Missing Key",
             JasonErrorKind::LexerError(_) => "Lexer Error",
             JasonErrorKind::UndefinedTemplate(_) => "Undefined Template",
-            JasonErrorKind::LuaFnError(_) => "Lua Function Error"
+            JasonErrorKind::LuaFnError(_) => "Lua Function Error",
+            JasonErrorKind::IndexError => "Indexing Error"
         }
     }
 }

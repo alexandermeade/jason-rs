@@ -198,15 +198,24 @@ Error: Lua Function Error in file ./main.jason on line 8: failed to find functio
 | `name() {...}` | Defines a template name  |
 | `name = ...` | Defines a variable name  |
 | `name(...)` | invokes a template |
+| `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|
 | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |
 | `import(*) from "path/to/file.jason"` | imports all templates and all variables from a file |
 | `import($) from "path/to/file.jason"` | imports all variables from a file |
 | `func(...)!` | calls a built in function with passed in arguments|
-| `expression * n  OR   n * expression` | repeats expression a positive integer n times and stores it as a list |
-| `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|
+| `expression * n  OR   n * expression` | repeatedly evaluates expression a positive integer n times and stores it as a list |
+| `expression repeats n` | repeats expression a positive integer n times and stores it as a list but does not revaluate expression! Note: it's faster than * if revaluation is not needed |
+| `str(expression)` |converts expression result into a string|
 | `{...} + {...}` | Object concat yeilds {name: "Alex"} + {age: 20} = {name: "Alex", age: 20}. Note it overrides keys with right dominance|
 | `[...] + [...]` | list concat expressions. yeilds [1,2,3] + [4,5] = [1,2,3,4,5]|
 | `"..." + "..."` | String concat yeilds "hello" + " world" = "hello world". strings support unicode!|
+| `"alex" at 0` | gets character at index 0 in this case 'a'!|
+| `["alex", "jason"] at 1` | gets element at index 1 in this case "jason"!|
+| `{name: "alex", age: 20} at "age"` | gets the value with key "age" in this case 20!|
+| `[...] pick 2` | picks two values randomly from array!|
+| `[...] upick 2` | picks two unique values randomly from array!|
+| `[...] map(n) expression` |maps each element from the array on the left (noted as n in this case) with the expression on the right of map|
+| `[...] map(n, i) expression` |evaluates similiar to a normal map but the second argument represents position in array|
 
 Parses a `.jason` file at the given path and returns a serde_json value object which can then be converted to structs
 

@@ -37,6 +37,7 @@ impl Template {
             
         // Save original variable state for keys we're overwriting
         let mut old_values = HashMap::new();
+
         for key in args.keys() {
             if let Some(val) = context.variables.get(key).cloned() {
                 old_values.insert(key.clone(), val);

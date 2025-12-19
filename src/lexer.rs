@@ -382,6 +382,12 @@ impl Lexer {
                 if c.is_alphabetic() || c == '_' {
                     let id = self.lex_id();
                     self.skip_whitespace();
+                    
+                    if TokenType::is_keyword(&id.plain()) {
+                        self.back();
+                        return id;
+                    }
+
                     match self.curr_char {
                         '(' => {    
                             let toks: Vec<Token> = match self.collect_toks_between(TokenType::OpenParen, TokenType::ClosedParen){

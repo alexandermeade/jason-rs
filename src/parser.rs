@@ -33,16 +33,17 @@ impl Parser {
         let token = self.current().cloned().unwrap_or(Token::new(TokenType::EOT, "EOT".to_string(), 1, 1));
         
         return match token.token_type {
-            TokenType::ID               | 
-            TokenType::NumberType       | 
-            TokenType::List(_)          | 
-            TokenType::FnCall(_)        |
-            TokenType::LuaFnCall(_)     |
-            TokenType::Import(_)        |
-            TokenType::StringLiteral(_) | 
-            TokenType::BoolLiteral(_)   |
-            TokenType::DollarSign       |
-            TokenType::Use(_)           |
+            TokenType::ID                 | 
+            TokenType::NumberType         | 
+            TokenType::List(_)            | 
+            TokenType::FnCall(_)          |
+            TokenType::LuaFnCall(_)       |
+            TokenType::Import(_)          |
+            TokenType::StringLiteral(_)   | 
+            TokenType::BoolLiteral(_)     |
+            TokenType::DollarSign         |
+            TokenType::Use(_)             |
+            TokenType::StringConverion(_) | 
             TokenType::Mult => {
                 self.next();
                 ASTNode::new(token) 
@@ -85,6 +86,12 @@ impl Parser {
                     node = ASTNode::new(token)
                         .children(Some(Box::new(node)), Some(Box::new(right)));
                 },
+                TokenType::At | TokenType::Pick | TokenType::UPick | TokenType::Map(_) => {
+                    self.next();
+                    let right = self.addition();
+                    node = ASTNode::new(token)
+                        .children(Some(Box::new(node)), Some(Box::new(right)));
+                },
                 _ => break,
             }
         }
@@ -92,7 +99,6 @@ impl Parser {
     }
     
     fn expr(&mut self) -> ASTNode {
-        // Check for Out FIRST, BEFORE parsing any terms
         if let Some(token) = self.current() {
             if token.token_type == TokenType::Out {
                 let out_token = token.clone();

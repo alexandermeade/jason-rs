@@ -1,8 +1,10 @@
 use crate::{
-    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, lua_instance::LuaInstance, template::Template, token::{ArgsToNode, TokenType}
+    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, lua_instance::LuaInstance, template::Template, token::{ArgsToNode, Token, TokenType}
 };
-use std::collections::HashMap;
+
+use std::{collections::HashMap};
 use mlua::Table;
+use rand::Rng;
 use serde_json::{Value, Number, Map};
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -62,7 +64,7 @@ impl Context {
     pub fn clear_local_root(&mut self) {
         self.local_root = None;
     }
-
+    //repeat and evaluate
     fn repeat_value(&mut self, count: String, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let count = count.parse::<f64>().map_err(|_| 
             JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse num {}", count)))?;
@@ -72,6 +74,20 @@ impl Context {
             let value = self.to_json(repeated_node)?.ok_or_else(||
                 JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"value is None"))?;
             result.push(value);
+        }
+        return Ok(Some(Value::Array(result)));
+    }
+    //repeat and don't evaluate
+    fn dumb_repeat_value(&mut self, count: String, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        let count = count.parse::<f64>().map_err(|_| 
+            JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse num {}", count)))?;
+        let bound:usize = count as usize;
+        let mut result: Vec<Value> = Vec::with_capacity(bound);
+
+        let value = self.to_json(repeated_node)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"value is None"))?;
+        for _ in 0..bound{
+            result.push(value.clone());
         }
         return Ok(Some(Value::Array(result)));
     }
@@ -104,6 +120,36 @@ impl Context {
         Err(JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(), self.local_root.clone(),
             format!("repeat statement failed")))
     }
+
+    fn eval_repeat(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        // Repeat operations: expression * n or n * expression
+        if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
+            match (&left_node.token.token_type, &right_node.token.token_type) {
+                (_, TokenType::ID) => {
+                    let eval_variable = self.to_json(right_node)?.unwrap();                    
+                    return self.dumb_repeat_value(eval_variable.to_string(), &left_node);
+                }
+                (TokenType::ID, _) => {
+                    let eval_variable = self.to_json(left_node)?.unwrap();                    
+                    return self.dumb_repeat_value(eval_variable.to_string(), &right_node);
+                }
+
+                // Left-sided: expression * n
+                (_, TokenType::NumberLiteral(num)) => {
+                    return self.dumb_repeat_value(num.clone(), &left_node);
+                }
+                // Right-sided: n * expression
+                (TokenType::NumberLiteral(num), _) => {
+                    return self.dumb_repeat_value(num.clone(), &right_node);
+                }
+                _ => return Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(), 
+                    "invalid operation"))
+            }
+        }
+        Err(JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(), self.local_root.clone(),
+            format!("repeat statement failed")))
+    }
+
 
     pub fn eval_equal(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
@@ -265,11 +311,324 @@ impl Context {
         }
     }
 
+    pub fn eval_at(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+       let left = self.to_json(node.left.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
+        let right = self.to_json(node.right.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError,self.source_path.clone(), self.local_root.clone(), "right value is None"))?;
+
+        match (left, right) {
+            // [a, b, c, ...] at 0 -> a
+            (Value::Array(a), Value::Number(n)) => {
+                let index = n.as_f64().ok_or_else(|| JasonError::new(
+                    JasonErrorKind::ConversionError,
+                    self.source_path.clone(),
+                    self.local_root.clone(),
+                    format!("unable to convert number {} to index", n)
+                ))? as usize;
+
+                a.get(index)
+                    .cloned() 
+                    .ok_or_else(|| JasonError::new(
+                        JasonErrorKind::IndexError,
+                        self.source_path.clone(),
+                        self.local_root.clone(),
+                        format!("invalid convert number {} at list with len {}", index, a.len())
+                    ))
+                    .map(Some)
+            },
+             // [a, b, c, ..., z] at 0..n -> [a, b, c, ... up to n]
+            // {name: "alex", age: 20} at "name" -> "alex" 
+            (Value::String(s), Value::Number(n)) => {
+                let index = n.as_f64().ok_or_else(|| JasonError::new(
+                    JasonErrorKind::ConversionError,
+                    self.source_path.clone(),
+                    self.local_root.clone(),
+                    format!("unable to parse number {} to index", n)
+                ))? as usize;
+
+                s.chars().nth(index).ok_or_else(|| JasonError::new(
+                        JasonErrorKind::IndexError, 
+                        self.source_path.clone(), 
+                        self.local_root.clone(),  
+                        format!("invalid convert number {} at list with len {}", index, s.len())
+                )).map(|c| Some(Value::String(c.to_string()))) 
+            }
+
+            // {name: "alex", age: 20} at ["name", "age"] -> ["alex", 20] 
+            (Value::Object(a), Value::String(key)) => {
+                a.get(&key).ok_or_else(|| {
+                    JasonError::new(
+                        JasonErrorKind::IndexError, 
+                        self.source_path.clone(), 
+                        self.local_root.clone(),  
+                        format!("key doesn't exit {}", key)
+                    )
+                }).map(|v| Some(v.clone()))
+            }
+            // [{name: "alex", age: 20}, {name: "jason", age: 38} at each ["name"] -> ["alex", "jason"] 
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
+                format!("invalid + operation for values ", ))),
+        }        
+    }
+
+    pub fn eval_pick(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+       let left = self.to_json(node.left.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
+        let right = self.to_json(node.right.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError,self.source_path.clone(), self.local_root.clone(), "right value is None"))?;
+      
+        //rust thinks this is unused
+        #[allow(unused_assignments)]
+        let mut count:usize = 0;
+
+        if let Value::Number(n) = right {
+            count = n.as_f64().ok_or_else(|| JasonError::new(
+                    JasonErrorKind::ConversionError,
+                    self.source_path.clone(),
+                    self.local_root.clone(),
+                    format!("unable to convert number {} to index", n)
+                ))? as usize;
+        } else {
+            return Err(JasonError::new(
+                JasonErrorKind::ValueError, 
+                self.source_path.clone(), 
+                self.local_root.clone(), 
+                format!("value must be of type number")
+            ))
+        }
+
+        match left {
+            // [a, b, c, ...] at 0 -> a
+            Value::Array(a) => {
+                
+                if a.is_empty() {
+                    return Ok(Some(serde_json::Value::Array(Vec::new())));
+                }
+
+                let mut result:Vec<serde_json::Value> = Vec::with_capacity(count);
+                
+                for _ in 0..count {
+
+                    let index = rand::rng().random_range(0..a.len());
+
+                    let value = a.get(index).ok_or_else(|| JasonError::new(
+                            JasonErrorKind::IndexError, 
+                            self.source_path.clone(), 
+                            self.local_root.clone(), 
+                            format!("unable to index array while picking with values {}", count)
+                        )
+                    )?.clone();
+                    result.push(value); 
+                }
+
+                return Ok(Some(serde_json::Value::Array(result)))
+            },
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
+                format!("invalid + operation for values ", ))),
+        }        
+    }
+
+    pub fn eval_upick(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+       let left = self.to_json(node.left.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
+        let right = self.to_json(node.right.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError,self.source_path.clone(), self.local_root.clone(), "right value is None"))?;
+      
+        //rust thinks this is unused
+        #[allow(unused_assignments)]
+        let mut count:usize = 0;
+
+        if let Value::Number(n) = right {
+            count = n.as_f64().ok_or_else(|| JasonError::new(
+                    JasonErrorKind::ConversionError,
+                    self.source_path.clone(),
+                    self.local_root.clone(),
+                    format!("unable to convert number {} to index", n)
+                ))? as usize;
+        } else {
+            return Err(JasonError::new(
+                JasonErrorKind::ValueError, 
+                self.source_path.clone(), 
+                self.local_root.clone(), 
+                format!("value must be of type number")
+            ))
+        }
+
+        match left {
+            // [a, b, c, ...] at 0 -> a
+            Value::Array(a) => { 
+                if a.is_empty() {
+                    return Ok(Some(serde_json::Value::Array(Vec::new())));
+                }
+
+                if count > a.len() {
+                    return Err(
+                        JasonError::new(
+                            JasonErrorKind::InvalidOperation, 
+                            self.source_path.clone(), 
+                            self.local_root.clone(), 
+                            format!("unable to use upick operaton when count {} is larger than the count of elements {}", count, a.len())
+                        )
+                    )
+                }
+
+                let mut result:Vec<serde_json::Value> = Vec::with_capacity(count);
+                let mut possible_indexs = (0..a.len()).collect::<Vec<usize>>(); 
+
+                for _ in 0..count {
+
+                    let index = rand::rng().random_range(0..possible_indexs.len());
+                    
+                    let picked_index = possible_indexs.remove(index);
+                    let value = a.get(picked_index).ok_or_else(|| JasonError::new(
+                            JasonErrorKind::IndexError, 
+                            self.source_path.clone(), 
+                            self.local_root.clone(), 
+                            format!("unable to index array while picking with values {}", count)
+                        )
+                    )?.clone();
+
+                    result.push(value); 
+                }
+
+                return Ok(Some(serde_json::Value::Array(result)))
+            },
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
+                format!("invalid + operation for values ", ))),
+        }        
+    }
+
+    pub fn eval_map(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>>{
+        let left = self.to_json(node.left.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
+        let right = node.right.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?;
+        
+
+        let args = match &node.token.token_type {
+            TokenType::Map(args) => args,
+            _ => return Err(
+                 JasonError::new(
+                    JasonErrorKind::ValueError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("left side of the operand must be of type List")
+                ))
+        };
+
+        let values = match left {
+            Value::Array(args) => args,
+            _ => return Err(
+                JasonError::new(
+                    JasonErrorKind::ValueError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("left side of the operand must be of type List")
+                ))
+        };
+        let mut flat_args: Vec<Token> = args.iter().flat_map(|v| v.iter().cloned()).collect();
+
+        if flat_args.is_empty() {
+            return Err(JasonError::new(
+                JasonErrorKind::ValueError,
+                self.source_path.clone(),
+                self.local_root.clone(),
+                "map must have at least one argument",
+            ));
+        }
+
+        let argument = flat_args.remove(0).plain(); // first token
+        let index_argument = if !flat_args.is_empty() {
+            flat_args.remove(0).plain() // second token, if exists
+        } else {
+            "".to_string()
+        };
+        let has_index_argument = !index_argument.is_empty();
+        
+        let mut results:Vec<Value> = Vec::with_capacity(values.len());
+
+        for (i, value) in values.into_iter().enumerate() {
+            self.variables.insert(argument.clone(), value);
+            
+            if has_index_argument {
+                self.variables.insert(index_argument.clone(), Value::Number(i.into()));
+            }
+
+            results.push(
+                self.to_json(right)?
+                    .ok_or_else(|| 
+                        JasonError::new(
+                            JasonErrorKind::ValueError,
+                            self.source_path.clone(),
+                            self.local_root.clone(),
+                            format!("variable {} in mapping already exists", argument),
+                        )
+                    )?
+            );
+
+            if has_index_argument {
+                self.variables.remove(&index_argument);
+            }
+
+            self.variables.remove(&argument);
+        }
+        
+        Ok(Some(Value::Array(results)))
+    }
+     
     pub fn to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         match &node.token.token_type {
             TokenType::Null => Ok(Some(serde_json::Value::Null)),
+            TokenType::Map(_) => self.eval_map(node),
             TokenType::Mult => self.eval_mult(node),
+            TokenType::Repeat => self.eval_repeat(node),
             TokenType::Plus => self.eval_plus(node),
+            TokenType::At => self.eval_at(node),
+            TokenType::Pick => self.eval_pick(node),
+            TokenType::UPick => self.eval_upick(node),
+            TokenType::StringConverion(args) => {
+                let args:Vec<ASTNode> = args.to_nodes()?;
+
+                let inner_value = args.get(0).ok_or_else(|| 
+                    JasonError::new(
+                        JasonErrorKind::ValueError, 
+                        self.source_path.clone(), 
+                        self.local_root.clone(), 
+                        format!("needs an inner value to convert from")
+                    )
+                )?;
+                
+                let value = self.to_json(inner_value)?.ok_or_else(|| 
+                    JasonError::new(
+                        JasonErrorKind::ConversionError, 
+                        self.source_path.clone(), 
+                        self.local_root.clone(), 
+                        format!("failed to evaluate value into string")
+                    )
+                )?;
+                
+                let result = match value {
+                    Value::Number(n) => n.to_string(),
+                    Value::Bool(b) => b.to_string(),
+                    Value::Null => String::from("null"),
+                    v => return Err(JasonError::new(
+                        JasonErrorKind::ConversionError, 
+                        self.source_path.clone(), 
+                        self.local_root.clone(), 
+                        format!("Cannot convert type {} into string", v)
+                    ))
+                };
+
+                Ok(Some(Value::String(result)))
+            },
             TokenType::ID => {
                 if !self.variables.contains_key(&node.token.plain()) {
                     return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()), self.source_path.clone(),self.local_root.clone(),

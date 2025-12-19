@@ -19,6 +19,7 @@ pub enum TokenType {
     Export(Args),
     FnCall(Args),
     LuaFnCall(Args),
+    Map(Args),
     Index(Args),
     // input args, block args
     TemplateDef(Args, Args),
@@ -60,7 +61,11 @@ pub enum TokenType {
     LessThan,
     GreaterThan,
     // keywords
+    StringConverion(Args),
+    UPick,
+    Pick,
     From,
+    At,
     Repeat,
     Append, 
     Unpack,
@@ -101,11 +106,18 @@ impl TokenType {
             "embed" => TokenType::Embed,
             "return" => TokenType::Return,
             "out" => TokenType::Out,
+            "at" => TokenType::At,
+            "upick" => TokenType::UPick,
+            "pick" => TokenType::Pick,
             "repeat" => TokenType::Repeat,
             "append" => TokenType::Append,
             "unpack" => TokenType::Unpack,
             _ => TokenType::ID
         }
+    }
+
+    pub fn is_keyword(content:&str) -> bool {
+        return Self::find_keyword(content) != TokenType::ID;
     }
 
     pub fn as_open_delim(&self) -> Option<char> {
@@ -218,6 +230,8 @@ impl Token {
             return match name {
                 "import" => Token::new(TokenType::Import(args), name.to_string(), row, colmn),
                 "export" => Token::new(TokenType::Export(args), name.to_string(), row, colmn),
+                "str" => Token::new(TokenType::StringConverion(args), name.to_string(), row, colmn),
+                "map" => Token::new(TokenType::Map(args), name.to_string(), row, colmn),
                 "use" => Token::new(TokenType::Use(args), name.to_string(), row, colmn),
                 _ => self,
             } 
@@ -265,8 +279,10 @@ impl Token {
 
             // ===== Function calls =====
             TokenType::FnCall(args)
+            | TokenType::Map(args)
             | TokenType::Import(args)
             | TokenType::Export(args)
+            | TokenType::StringConverion(args)
             | TokenType::Use(args) => {
                 let args_str = args.as_string_tuple();
                 format!("{}{}", self.plain, args_str)
@@ -342,6 +358,9 @@ impl Token {
             TokenType::Return     => "return".to_string(),
             TokenType::From       => "from".to_string(),
             TokenType::Repeat     => "repeat".to_string(),
+            TokenType::Pick       => "pick".to_string(),
+            TokenType::UPick      => "upick".to_string(),
+            TokenType::At         => "at".to_string(),
             TokenType::Append     => "append".to_string(),
             TokenType::Unpack     => "unpack".to_string(),
             TokenType::FN         => "fn".to_string(),

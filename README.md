@@ -204,7 +204,7 @@ Error: Lua Function Error in file ./main.jason on line 8: failed to find functio
 | `import($) from "path/to/file.jason"` | imports all variables from a file |
 | `func(...)!` | calls a built in function with passed in arguments|
 | `expression * n  OR   n * expression` | repeatedly evaluates expression a positive integer n times and stores it as a list |
-| `expression repeats n` | repeats expression a positive integer n times and stores it as a list but does not revaluate expression! Note: it's faster than * if revaluation is not needed |
+| `expression repeat n` | repeats expression a positive integer n times and stores it as a list but does not revaluate expression! Note: it's faster than * if revaluation is not needed |
 | `str(expression)` |converts expression result into a string|
 | `{...} + {...}` | Object concat yeilds {name: "Alex"} + {age: 20} = {name: "Alex", age: 20}. Note it overrides keys with right dominance|
 | `[...] + [...]` | list concat expressions. yeilds [1,2,3] + [4,5] = [1,2,3,4,5]|

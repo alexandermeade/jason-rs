@@ -71,16 +71,17 @@ impl Template {
         }
                 
         // Evaluate block
-        let resolved_block = context.to_json(&ASTNode::new(
+        let block_node = &ASTNode::new(
             Token::new(token::TokenType::Block(self.block.clone()), "block".to_string(), 1, 1)
-        ))?.ok_or_else(|| 
+        );
+        let resolved_block = context.to_json(block_node)?.ok_or_else(|| 
             context.err(JasonErrorKind::ValueError, format!("failed to evaluate block"))
         )?;
 
         if !result_type.matches(&resolved_block) {
             let block_type = context.infer_type_from(&resolved_block)?;
             return Err(
-                context.err(JasonErrorKind::Custom, format!("Template {} resulted in {} expected {}", self.name, result_type, block_type))
+                context.err(JasonErrorKind::TypeError(block_node.token.plain()), format!("Template {} resulted in {} expected {}", self.name, block_type, result_type))
             )
         }
         

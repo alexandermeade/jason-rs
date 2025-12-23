@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::collections::hash_map::HashMap;
-use serde_json::{Value, json, value};
+use serde_json::{Value};
 
 use crate::token::ArgsToNode;
 use crate::astnode::ASTNode;
@@ -161,12 +161,6 @@ impl Context {
                     )
                 )
             },
-            _ => return Err(JasonError::new(
-                JasonErrorKind::Custom, 
-                self.source_path.clone(),
-                self.local_root.clone(),
-                format!("Unable to infer type for value")
-            ))
         }
     }
 

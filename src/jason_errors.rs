@@ -13,7 +13,6 @@ pub enum JasonErrorKind {
     TypeError(String),
     FileError,
     ContextError,
-    UndefinedVariable(String),
     InvalidOperation,
     MissingNode,
     ConversionError,
@@ -21,6 +20,8 @@ pub enum JasonErrorKind {
     Bundle(Vec<JasonError>),
     ImportError,
     LuaError,
+    UndefinedType(String),
+    UndefinedVariable(String),
     UndefinedTemplate(String),
     LuaFnError(String),
     LexerError(String),
@@ -135,7 +136,6 @@ impl JasonError {
             JasonErrorKind::SyntaxError => "Syntax Error",
             JasonErrorKind::ValueError => "Value Error",
             JasonErrorKind::TypeError(_) => "Type Error",
-            JasonErrorKind::UndefinedVariable(_) => "Undefined Variable",
             JasonErrorKind::InvalidOperation => "Invalid Operation",
             JasonErrorKind::MissingNode => "Missing Node",
             JasonErrorKind::ConversionError => "Conversion Error",
@@ -148,6 +148,8 @@ impl JasonError {
             JasonErrorKind::MissingValue => "Missing Value",
             JasonErrorKind::MissingKey => "Missing Key",
             JasonErrorKind::LexerError(_) => "Lexer Error",
+            JasonErrorKind::UndefinedType(_) => "Undefined Type",
+            JasonErrorKind::UndefinedVariable(_) => "Undefined Variable",
             JasonErrorKind::UndefinedTemplate(_) => "Undefined Template",
             JasonErrorKind::LuaFnError(_) => "Lua Function Error",
             JasonErrorKind::IndexError => "Indexing Error"
@@ -206,7 +208,7 @@ impl std::fmt::Display for JasonError {
                 JasonErrorKind::ImportError => {
                     println!("{:>5}", highlight_string(&code_line, "*ALL*"));
                 },
-
+                JasonErrorKind::TypeError(var)         |
                 JasonErrorKind::UndefinedVariable(var) |
                 JasonErrorKind::UndefinedTemplate(var) => {
                     println!("{:>5}", highlight_string(&code_line, &var));

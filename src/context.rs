@@ -16,8 +16,12 @@ use crate::jason_errors::JasonErrorKind;
 #[derive(Debug)]
 pub enum ExportType {
     Template(String, Template),
-    Variable(String, serde_json::Value)
+    Variable(String, serde_json::Value),
+    TemplateType(String, (Vec<JasonType>, JasonType)),
+    VariableType(String, JasonType),
+    Type(String, JasonType)
 }
+
 #[derive(Debug)]
 pub struct Context {
     pub variables: HashMap<String, serde_json::Value>,
@@ -212,7 +216,6 @@ impl Context {
             }
             let infered_type = self.infer_type_from(&right_value)?;
             self.variable_types.insert(var_name.clone(), infered_type);
-            println!("{:?}", self.variable_types);
             self.variables.insert(var_name, right_value);             
         }
         Ok(None)
@@ -655,7 +658,6 @@ impl Context {
         match &left.token.token_type {
             TokenType::ID => {
                 self.types.insert(left.token.plain(), typed_value);
-                println!("{:?}", self.types);
                 Ok(None)
             },
             TokenType::FnCall(args) => {
@@ -673,13 +675,12 @@ impl Context {
                     )
                 );
 
-                println!("{:?}", self.template_types);
                 Ok(None)
             },
             _ => {
                 Err(
                     self.err(
-                        JasonErrorKind::Custom, 
+                        JasonErrorKind::UndefinedVariable(left.token.plain()), 
                         format!("Cannot set Type to value other than ID and Template()")
                     )   
                 )
@@ -833,12 +834,10 @@ impl Context {
         /*
         for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
             let (k, v) = pair.unwrap();
-            //println!("\tbase_env contains: {:?} = {:?}", k, v);
         }
         
         for pair in lua_instance.base_env.clone().pairs::<mlua::Value, mlua::Value>() {
             let (k, v) = pair.unwrap();
-            //println!("\tcontext_env contains: {:?} = {:?}", k, v);
         }
         */
         Ok(())
@@ -885,24 +884,55 @@ impl Context {
 
     pub fn export(&self, args: Vec<String>) -> Vec<ExportType> {
         let mut exported_values:Vec<ExportType> = Vec::new(); 
+
         for arg in &args {
             
             if arg == "$" {
                 for (name, value) in self.variables.clone() {
                     exported_values.push(ExportType::Variable(name, value));
                 }
+                for (name, value) in self.variable_types.clone() {
+                    exported_values.push(ExportType::VariableType(name, value));
+                }
+                for (name, value) in self.types.clone() {
+                    exported_values.push(ExportType::Type(name, value));
+                }
+                for (name, value) in self.template_types.clone() {
+                    exported_values.push(ExportType::TemplateType(name, value));
+                }
                 continue;
             }
+
             if self.variables.contains_key(arg) {
                 let variable = self.variables.get(arg).unwrap().clone();
                 exported_values.push(ExportType::Variable(arg.clone(), variable));
                 continue;
             }
+
             if self.templates.contains_key(arg) {
                 let template = self.templates.get(arg).unwrap().clone();
                 exported_values.push(ExportType::Template(arg.clone(), template));
                 continue;
             }
+
+            if self.variable_types.contains_key(arg) {
+                let variable = self.variable_types.get(arg).unwrap().clone();
+                exported_values.push(ExportType::VariableType(arg.clone(), variable));
+                continue;
+            }
+            if self.types.contains_key(arg) {
+                let variable = self.types.get(arg).unwrap().clone();
+                exported_values.push(ExportType::Type(arg.clone(), variable));
+                continue;
+            }
+            if self.template_types.contains_key(arg) {
+                let variable = self.template_types.get(arg).unwrap().clone();
+                exported_values.push(ExportType::TemplateType(arg.clone(), variable));
+                continue;
+            }
+
+
+
             //make this return a jason error
             panic!("{} is not exported from file {}", arg, self.source_path.clone());
         }
@@ -916,6 +946,16 @@ impl Context {
         for (name, value) in self.templates.clone() {
                 exported_values.push(ExportType::Template(name, value));
         }
+        for (name, value) in self.variable_types.clone() {
+            exported_values.push(ExportType::VariableType(name, value));
+        }
+        for (name, value) in self.types.clone() {
+            exported_values.push(ExportType::Type(name, value));
+        }
+        for (name, value) in self.template_types.clone() {
+            exported_values.push(ExportType::TemplateType(name, value));
+        }
+;
         exported_values
     }
     pub fn absorb_exports(&mut self, exports: Vec<ExportType>) {
@@ -923,9 +963,18 @@ impl Context {
             match exp {
                 ExportType::Template(name, template) => {
                     self.templates.insert(name, template);
-                }
+                },
                 ExportType::Variable(name, variable) => {
                     self.variables.insert(name, variable);
+                },
+                ExportType::TemplateType(name, t) => {
+                    self.template_types.insert(name, t);
+                },
+                ExportType::VariableType(name, t) => {
+                    self.variable_types.insert(name, t);
+                },
+                ExportType::Type(name, t) => {
+                    self.types.insert(name, t);
                 }
             }
         }

@@ -180,11 +180,16 @@ impl Lexer {
             }
         } 
     }
-    
+
     pub fn get_next(&mut self) -> Option<char> {
         self.skip_whitespace();
         return self.contents.chars().nth(self.char_index + 1);
     }
+
+    pub fn get_direct_next(&mut self) -> Option<char> {
+        return self.contents.chars().nth(self.char_index + 1);
+    }
+
     
     #[allow(dead_code)]
     pub fn is_next(&mut self, c: char) -> bool {
@@ -317,7 +322,23 @@ impl Lexer {
             '"' => self.lex_string(),
             '.' => self.new_token(TokenType::Dot, format!(".")),
             ',' => self.new_token(TokenType::Comma, format!(",")),
-            ':' => self.new_token(TokenType::Colon, format!(":")),
+            ':' => {
+                if let Some(next) = self.get_direct_next() {
+                    match next {
+                        ':' => {
+                            self.next();
+                            return self.new_token(TokenType::DoubleColon, format!("::"))
+                        },
+                        '=' => {
+                            self.next();
+                            return self.new_token(TokenType::Narwhal, format!(":="))
+                        }
+                        _ => {}
+                    }
+                }
+
+                self.new_token(TokenType::Colon, format!(":"))
+            },
             '>' => self.new_token(TokenType::GreaterThan, format!(">")),
             '\n' => return self.new_token(TokenType::NewLine, format!("\\n")),
             '\t' | ' ' => {

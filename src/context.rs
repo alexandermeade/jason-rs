@@ -1,5 +1,5 @@
 use crate::{
-    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, lua_instance::LuaInstance, template::Template, token::{ArgsToNode, Token, TokenType}
+    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, jason_types::JasonType, lua_instance::LuaInstance, template::Template, token::{ArgsToNode, Token, TokenType}
 };
 
 use std::{collections::HashMap};
@@ -22,6 +22,9 @@ pub enum ExportType {
 pub struct Context {
     pub variables: HashMap<String, serde_json::Value>,
     pub templates: HashMap<String, Template>,
+    pub types: HashMap<String, JasonType>,
+    pub variable_types: HashMap<String, JasonType>,
+    pub template_types: HashMap<String, (Vec<JasonType>, JasonType)>,
     pub out: serde_json::Value,
     pub source_path: Rc<String>,
     pub lua_instance: Rc<RefCell<LuaInstance>>,
@@ -48,6 +51,9 @@ impl Context {
         Ok(Context {
             variables: HashMap::new(),
             templates: HashMap::new(),
+            types: HashMap::new(),
+            variable_types: HashMap::new(),
+            template_types: HashMap::new(),
             out: Value::Null,
             source_path: path,
             lua_instance,
@@ -150,7 +156,6 @@ impl Context {
             format!("repeat statement failed")))
     }
 
-
     pub fn eval_equal(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
             let left = &left_node;
@@ -161,9 +166,54 @@ impl Context {
                         left.token.plain(),
                         right.token.plain())));
             }
+
             let right_value = self.to_json(right)?.ok_or_else(||
                 JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), None,"right value is None"))?;
-            self.variables.insert(left.token.plain(), right_value);             
+            let var_name = left.token.plain();
+
+            if self.variable_types.contains_key(&var_name) {
+                let infered_type = self.infer_type_from(&right_value)?;
+                let typed_var = self.variable_types.get(&var_name).unwrap();
+                if !typed_var.matches(&right_value) {
+                    return Err(
+                        self.err(
+                            JasonErrorKind::TypeError(var_name),
+                            format!("type mismatches\n expected {}, found {}", typed_var, infered_type)
+                        )
+                    )
+                }
+            }
+
+            self.variables.insert(var_name, right_value);             
+        }
+        Ok(None)
+    }
+
+    pub fn eval_narwhal(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
+            let left = &left_node;
+            let right = &right_node;
+            if left.token.token_type != TokenType::ID {
+                return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
+                    format!("[ERROR] {} = {}, variable name must be a valid identifier!",
+                        left.token.plain(),
+                        right.token.plain())));
+            }
+
+            let right_value = self.to_json(right)?.ok_or_else(||
+                JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), None,"right value is None"))?;
+            let var_name = left.token.plain();
+
+            if self.variable_types.contains_key(&var_name) {
+                return Err(self.err(
+                    JasonErrorKind::TypeError(var_name.clone()),
+                    format!("cannot reassign type of {}, existing type is, {}", var_name, self.variable_types.get(&var_name).unwrap())
+                ))
+            }
+            let infered_type = self.infer_type_from(&right_value)?;
+            self.variable_types.insert(var_name.clone(), infered_type);
+            println!("{:?}", self.variable_types);
+            self.variables.insert(var_name, right_value);             
         }
         Ok(None)
     }
@@ -279,7 +329,7 @@ impl Context {
             };
             return Ok(Some(json_value));
         }
-        Err(JasonError::new(JasonErrorKind::TypeError, self.source_path.clone(), None,
+        Err(JasonError::new(JasonErrorKind::TypeError(node.token.pretty()), self.source_path.clone(), None,
             "at eval_lua_fn token is not of luafncall"))
     }
     
@@ -583,7 +633,60 @@ impl Context {
         
         Ok(Some(Value::Array(results)))
     }
-     
+    
+    fn eval_double_colon(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        let left = 
+                node.left
+                .as_ref()
+                .ok_or_else(||
+                    self.err(JasonErrorKind::MissingValue, format!("left side of the expression is missing"))
+                )?;
+
+        let typed_value:JasonType = 
+            self.to_type(
+                node
+                .right
+                .as_ref()
+                .ok_or_else(||
+                    self.err(JasonErrorKind::MissingValue,format!("right side of the expression is missing"))
+                )?
+            )?;        
+
+        match &left.token.token_type {
+            TokenType::ID => {
+                self.variable_types.insert(left.token.plain(), typed_value);
+                println!("{:?}", self.variable_types);
+                Ok(None)
+            },
+            TokenType::FnCall(args) => {
+                let typed_args = args
+                        .to_nodes()?
+                        .iter()
+                        .map(|e| self.to_type(e))
+                        .collect::<JasonResult<Vec<JasonType>>>()?;
+ 
+                self.template_types.insert(
+                    left.token.plain(), 
+                    (
+                        typed_args,
+                        typed_value
+                    )
+                );
+                println!("{:?}", self.template_types);
+                Ok(None)
+            },
+            _ => {
+                Err(
+                    self.err(
+                        JasonErrorKind::Custom, 
+                        format!("Cannot set Type to value other than ID and Template()")
+                    )   
+                )
+            }
+        }
+
+    }
+
     pub fn to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         match &node.token.token_type {
             TokenType::Null => Ok(Some(serde_json::Value::Null)),
@@ -649,6 +752,7 @@ impl Context {
                         format!("Failed to convert number")))?)))
             },
             TokenType::Equals => self.eval_equal(node),
+            TokenType::Narwhal => self.eval_narwhal(node),
             TokenType::StringLiteral(s) => Ok(Some(serde_json::Value::String(s.to_string()))), 
             TokenType::List(args) => {
                 let json_values: Vec<Value> = args.to_nodes()?
@@ -686,6 +790,7 @@ impl Context {
                 if !self.templates.contains_key(&node.token.plain()) {
                     return Err(JasonError::new(JasonErrorKind::UndefinedTemplate(node.token.plain()), self.source_path.clone(), self.local_root.clone(), format!("the template {} does not exist in file {}", node.token.plain(), self.source_path)));
                 }
+
                 let template = self.templates.get(&node.token.plain()).unwrap().clone();
                 template.resolve(self, args.to_vec())
             },
@@ -719,7 +824,7 @@ impl Context {
         */
         Ok(())
     }
-    fn block_to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+    pub fn block_to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::Block(args) = &node.token.token_type {
             let nodes = args.to_nodes()?;
             let mut map = Map::new(); // this will become our JSON object
@@ -744,16 +849,18 @@ impl Context {
             }
             Ok(Some(Value::Object(map)))
         } else {
-            Err(JasonError::new(JasonErrorKind::TypeError, self.source_path.clone(), self.local_root.clone(),
+            Err(JasonError::new(JasonErrorKind::TypeError(node.token.pretty()), self.source_path.clone(), self.local_root.clone(),
                 "block_to_json called on non-block token"))
         }
     }
+
     pub fn add_var(&mut self, key: String, value: serde_json::Value) {
         self.variables.insert(key, value);
     }
     pub fn remove_var(&mut self, key: String) {
         self.variables.remove(&key);
     }
+
     pub fn export(&self, args: Vec<String>) -> Vec<ExportType> {
         let mut exported_values:Vec<ExportType> = Vec::new(); 
         for arg in &args {
@@ -800,5 +907,14 @@ impl Context {
                 }
             }
         }
+    }
+
+    pub fn err(&self, error_kind: JasonErrorKind, msg: String) -> JasonError {
+        JasonError::new(
+            error_kind, 
+            self.source_path.clone(), 
+            self.local_root.clone(),
+            msg
+        )
     }
 }

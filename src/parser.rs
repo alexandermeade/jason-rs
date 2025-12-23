@@ -86,7 +86,11 @@ impl Parser {
                     node = ASTNode::new(token)
                         .children(Some(Box::new(node)), Some(Box::new(right)));
                 },
-                TokenType::At | TokenType::Pick | TokenType::UPick | TokenType::Map(_) => {
+                TokenType::At          | 
+                TokenType::Pick        | 
+                TokenType::UPick       | 
+                TokenType::DoubleColon | 
+                TokenType::Map(_)   => {
                     self.next();
                     let right = self.addition();
                     node = ASTNode::new(token)
@@ -114,11 +118,12 @@ impl Parser {
         
         while let Some(token) = self.current().cloned() {
             match token.token_type {
-                TokenType::Colon  | 
-                TokenType::From   |
-                TokenType::AS     |
-                TokenType::Append |
-                TokenType::Equals => {
+                TokenType::Colon   | 
+                TokenType::From    |
+                TokenType::AS      |
+                TokenType::Append  |
+                TokenType::Equals  |
+                TokenType::Narwhal => {
                     self.next(); // consume the operator
                     let right = self.addition(); // Changed from term() to addition()
                     // build new AST node where operator is parent

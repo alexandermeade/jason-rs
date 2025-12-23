@@ -34,6 +34,7 @@ pub enum TokenType {
     Return,
     //special chars
     Bar,
+    DoubleColon,
     Colon,
     Dot,
     //whitespace
@@ -48,6 +49,7 @@ pub enum TokenType {
     ClosedCurly,
     // Math Symbols
     Equals,
+    Narwhal,
     Plus,
     Minus,
     Mult,
@@ -77,8 +79,9 @@ pub enum TokenType {
     Type,
     StringType,
     NumberType,
-    FloatType,
-    CharType,
+    BoolType,
+    AnyType,
+    NullType,
     Embed,
     Use(Args),
     Empty,
@@ -92,15 +95,14 @@ impl TokenType {
         match content {
             "null" => TokenType::Null,
             "from" => TokenType::From,
-            "fn" => TokenType::FN, 
-            "let" => TokenType::Let,
             "as" => TokenType::AS,
-            "string" => TokenType::StringType,
-            "int" => TokenType::NumberType,
+            "String" => TokenType::StringType,
+            "Number" => TokenType::NumberType,
+            "Bool"   => TokenType::BoolType,
+            "Any"    => TokenType::AnyType,
+            "Null"   => TokenType::Null,
             "true" => TokenType::BoolLiteral(true),
             "false" => TokenType::BoolLiteral(false),
-            "char" => TokenType::CharType,
-            "float" => TokenType::FloatType,
             "const" => TokenType::Const,
             "type" => TokenType::Type,
             "embed" => TokenType::Embed,
@@ -195,8 +197,7 @@ impl TokenType {
     pub fn is_type(&self) -> bool {
         return *self == TokenType::StringType || 
                *self == TokenType::NumberType || 
-               *self == TokenType::FloatType  ||
-               *self == TokenType::CharType   ||
+               *self == TokenType::BoolType   ||
                matches!(*self, TokenType::InnerType(_, _)); 
     }
 
@@ -332,6 +333,7 @@ impl Token {
 
             // ===== Simple punctuation =====
             TokenType::Bar           => "|".to_string(),
+            TokenType::DoubleColon   => "::".to_string(),
             TokenType::Colon         => ":".to_string(),
             TokenType::Dot           => ".".to_string(),
             TokenType::Comma         => ",".to_string(),
@@ -344,6 +346,7 @@ impl Token {
 
             // ===== Operators =====
             TokenType::Equals => "=".to_string(),
+            TokenType::Narwhal => ":=".to_string(),
             TokenType::Plus   => "+".to_string(),
             TokenType::Minus  => "-".to_string(),
             TokenType::Mult   => "*".to_string(),
@@ -369,10 +372,11 @@ impl Token {
             TokenType::Out        => "out".to_string(),
             TokenType::Const      => "const".to_string(),
             TokenType::Type       => "type".to_string(),
-            TokenType::StringType => "string".to_string(),
-            TokenType::NumberType => "int".to_string(),
-            TokenType::FloatType  => "float".to_string(),
-            TokenType::CharType   => "char".to_string(),
+            TokenType::StringType => "String".to_string(),
+            TokenType::NumberType => "Number".to_string(),
+            TokenType::BoolType   => "Bool".to_string(),
+            TokenType::AnyType    => "Any".to_string(),
+            TokenType::NullType   => "Null".to_string(),
             TokenType::Embed      => "embed".to_string(),
 
             TokenType::DollarSign => "$".to_string(),

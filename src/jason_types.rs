@@ -8,7 +8,7 @@ use crate::jason_errors::{JasonError, JasonErrorKind, JasonResult};
 use crate::context::Context;
 use crate::token::TokenType;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum JasonType {
     String,
     Number,
@@ -24,7 +24,15 @@ impl Context {
     
     pub fn to_type(&mut self, node: &ASTNode) -> JasonResult<JasonType> {
         match &node.token.token_type {
-
+            TokenType::ID           => Ok(
+                self.types.get(&node.token.plain())
+                .ok_or_else(|| 
+                    self.err(
+                        JasonErrorKind::UndefinedVariable(node.token.plain()), 
+                        format!("The type {} is not defined\n hint: to define the type do  {} :: T", node.token.plain(), node.token.plain())
+                    )
+                )?.clone()
+            ),
             TokenType::StringType   => Ok(JasonType::String),
             TokenType::NumberType   => Ok(JasonType::Number),
             TokenType::BoolType     => Ok(JasonType::Bool),

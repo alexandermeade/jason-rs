@@ -654,8 +654,8 @@ impl Context {
 
         match &left.token.token_type {
             TokenType::ID => {
-                self.variable_types.insert(left.token.plain(), typed_value);
-                println!("{:?}", self.variable_types);
+                self.types.insert(left.token.plain(), typed_value);
+                println!("{:?}", self.types);
                 Ok(None)
             },
             TokenType::FnCall(args) => {
@@ -672,6 +672,7 @@ impl Context {
                         typed_value
                     )
                 );
+
                 println!("{:?}", self.template_types);
                 Ok(None)
             },
@@ -697,6 +698,7 @@ impl Context {
             TokenType::At => self.eval_at(node),
             TokenType::Pick => self.eval_pick(node),
             TokenType::UPick => self.eval_upick(node),
+            TokenType::DoubleColon => self.eval_double_colon(node),
             TokenType::StringConverion(args) => {
                 let args:Vec<ASTNode> = args.to_nodes()?;
 
@@ -779,10 +781,27 @@ impl Context {
                 if args.len() > 0 {
                     let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
                 
-                    self.templates.insert(node.token.plain(), Template::new(args, block.clone()));
+                    self.templates.insert(
+                        node.token.plain(), 
+                        Template::new(
+                            node.token.plain(), 
+                            args, 
+                            block.clone(), 
+                            self.template_types.get(&node.token.plain()).cloned()
+                        )
+                    );
                     return Ok(None);
                 }
-                self.templates.insert(node.token.plain(), Template::new(Vec::new(), block.clone()));
+
+                self.templates.insert(
+                    node.token.plain(), 
+                    Template::new(
+                        node.token.plain(), 
+                        Vec::new(), 
+                        block.clone(), 
+                        self.template_types.get(&node.token.plain()).cloned()
+                    )
+                );
                 return Ok(None);
             },
             TokenType::LuaFnCall(_) => self.eval_lua_fn(node),
@@ -854,10 +873,13 @@ impl Context {
         }
     }
 
-    pub fn add_var(&mut self, key: String, value: serde_json::Value) {
+    pub fn add_var(&mut self, key: String, value: serde_json::Value, typing: JasonType) {
+        self.variable_types.insert(key.clone(), typing);
         self.variables.insert(key, value);
     }
+
     pub fn remove_var(&mut self, key: String) {
+        self.variable_types.remove(&key);
         self.variables.remove(&key);
     }
 

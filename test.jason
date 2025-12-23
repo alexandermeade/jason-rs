@@ -1,3 +1,11 @@
 
-name := {name: "Alex"} 
-name = "alex" 
+Name :: String
+
+age := 12
+
+Person(Name, Number) :: {name: String}
+Person(name, age) {
+    name: name
+}
+
+out Person("Alex", age) 

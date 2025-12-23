@@ -1,0 +1,13 @@
+
+//type Person = {name: String, age: Number} 
+
+Person(name, age) {
+    name: name is String,
+    age: age is Number,
+}
+
+
+name = (200, 100) 
+//asserts name must be string
+//errors out here
+

@@ -35,6 +35,10 @@ impl Parser {
         return match token.token_type {
             TokenType::ID                 | 
             TokenType::NumberType         | 
+            TokenType::StringType         |
+            TokenType::BoolType           | 
+            TokenType::AnyType            | 
+            TokenType::NullType           | 
             TokenType::List(_)            | 
             TokenType::FnCall(_)          |
             TokenType::LuaFnCall(_)       |
@@ -44,6 +48,8 @@ impl Parser {
             TokenType::DollarSign         |
             TokenType::Use(_)             |
             TokenType::StringConverion(_) | 
+            TokenType::IntConverion(_)    | 
+            TokenType::FloatConverion(_)  | 
             TokenType::Mult => {
                 self.next();
                 ASTNode::new(token) 
@@ -89,7 +95,6 @@ impl Parser {
                 TokenType::At          | 
                 TokenType::Pick        | 
                 TokenType::UPick       | 
-                TokenType::DoubleColon | 
                 TokenType::Map(_)   => {
                     self.next();
                     let right = self.addition();
@@ -123,7 +128,9 @@ impl Parser {
                 TokenType::AS      |
                 TokenType::Append  |
                 TokenType::Equals  |
-                TokenType::Narwhal => {
+                TokenType::DoubleColon |
+                TokenType::Narwhal      |
+                TokenType::SpiderWalrus => {
                     self.next(); // consume the operator
                     let right = self.addition(); // Changed from term() to addition()
                     // build new AST node where operator is parent
@@ -141,7 +148,7 @@ impl Parser {
         
         while let Some(token) = self.current().cloned() {
             match token.token_type {
-                TokenType::Plus | TokenType::Minus => {
+                TokenType::Plus | TokenType::Minus | TokenType::Bar => {
                     self.next();
                     let right = self.term(); // Right side parses at higher precedence
                     node = ASTNode::new(token)

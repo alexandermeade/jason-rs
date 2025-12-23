@@ -50,7 +50,7 @@ out {
 ```
 
 ### Jason Templates
-```jsaon
+```jason
 Dev(name, project, money) {
     name: name,
     project: project,
@@ -58,6 +58,38 @@ Dev(name, project, money) {
 }
 // invokes the template and fills in the variables with the passed in arguments
 out Dev("alex", "jason-rs", 0) 
+```
+
+### Types 
+```jason
+//creates a type for Developer (similar to a schema)
+Developer :: {
+    name: String,
+    project: String,
+    money: Number
+}
+
+//creates a typing for Dev that expects it to output 
+//the Developer schema
+Dev(String, String, Number) :: Developer 
+Dev(name, project, money) {
+    name: name,
+    project: project,
+    money: money,
+}
+
+//creates a variable with type Developer and assignes it
+alex:Developer = Dev("alex", "jason-rs", 0)
+
+out alex 
+```
+
+Errors with types are pretty clear.
+For example if Dev had incorrect inputs it will emit
+
+```jason
+Error: Type Error in file ./trans.jason on line 17: expected type String for name found Number in template Dev
+   17 | alex : Developer = Dev(20, "jason-rs", 0)
 ```
 
 ## importing
@@ -79,7 +111,6 @@ out Dev("alex", "jason-rs", 0)
 ```
 
 note: this will not import the context around DEV so variables will be ignored unless imported as well. 
-this warning will be patched in a later version with groups.
 
 ## * operator
 The * operator repeats an expression an integer number of times and then stores it in a list.
@@ -89,6 +120,9 @@ The * operator repeats an expression an integer number of times and then stores 
 out  "hello👋" * 12
 ```
 
+Note: 
+The `repeat` operator functions similar to the `*` operator except it doesn't reevaluate the expression each time so it's more efficent for copying static elements
+
 **pick_example.jason** 
 ```jason
 Person(name, age) {
@@ -97,8 +131,9 @@ Person(name, age) {
 }
 //makes a Person witha random name and int from 0 to 67. 2000 times and stores them into a list
 main = Person(random_name()!, random_int(67)!) * 2000
-//pick one value from main 12 times
-result = pick(main)!*12
+//pick one value from main 12 times (with repeats)
+//you should use upick for unique elements
+result = main pick 12 
 //out the result
 out result
 ```
@@ -194,18 +229,28 @@ Error: Lua Function Error in file ./main.jason on line 8: failed to find functio
 
 | Syntax | Description |
 |--------|-------------|
-| `name(arg1, arg2, ...) {...}` | Defines a template name |
-| `name() {...}` | Defines a template name  |
-| `name = ...` | Defines a variable name  |
+| `name(arg1, arg2, ...) {...}` | Defines a template  |
+| `name() {...}` | Defines a template  |
+| `name = ...` | Defines a variable name and sets the value to the result of the right hand expression |
+| `name := ...` | functions like the `=` operator except it infers a type onto `name`|
+| `name ::= T` | functions like the `:=` operator except it assignes a direct type onto `name` without giving it a value|
+| `name: T = ...` | Defines a variable name and sets the value to the result of the right hand expression and the Type to the right hand side of the `:` operator|
 | `name(...)` | invokes a template |
 | `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|
+| `String, Number, Bool, Any, Null, [T], {key1: T, key2: U}` | Note: `T` and `U` are types.  `[T]` defines a List of type `T`. `{key1, T, key2: U}` defines an object with two keys where the keys have their own respective types|
+| `Person :: T` | Creates a type alias `Person` of type `T`| 
+| `Person(T, ...) :: U` | Provides a type to a template where the arguments are positional types for the Template and the right hand side is the type of the result| 
 | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |
-| `import(*) from "path/to/file.jason"` | imports all templates and all variables from a file |
-| `import($) from "path/to/file.jason"` | imports all variables from a file |
+| `import(*) from "path/to/file.jason"` | imports all templates, variables and all types from a file |
+| `import($) from "path/to/file.jason"` | imports all variables and types from a file |
 | `func(...)!` | calls a built in function with passed in arguments|
 | `expression * n  OR   n * expression` | repeatedly evaluates expression a positive integer n times and stores it as a list |
 | `expression repeat n` | repeats expression a positive integer n times and stores it as a list but does not revaluate expression! Note: it's faster than * if revaluation is not needed |
-| `str(expression)` |converts expression result into a string|
+| `str(expression)` |converts expression result into a `string`|
+| `int(expression)` |converts expression result into a `Number` but cuts off the floating point values|
+| `float(expression)` |converts expression result into a `Number` but preserves floating point values|
+| `int(expression1, expression2)` |chooses a random int between expression1 and or equal to expression 2|
+| `float(expression1, expression2)` |chooses a random float between expression1 and or equal to expression 2|
 | `{...} + {...}` | Object concat yeilds {name: "Alex"} + {age: 20} = {name: "Alex", age: 20}. Note it overrides keys with right dominance|
 | `[...] + [...]` | list concat expressions. yeilds [1,2,3] + [4,5] = [1,2,3,4,5]|
 | `"..." + "..."` | String concat yeilds "hello" + " world" = "hello world". strings support unicode!|
@@ -216,7 +261,6 @@ Error: Lua Function Error in file ./main.jason on line 8: failed to find functio
 | `[...] upick 2` | picks two unique values randomly from array!|
 | `[...] map(n) expression` |maps each element from the array on the left (noted as n in this case) with the expression on the right of map|
 | `[...] map(n, i) expression` |evaluates similiar to a normal map but the second argument represents position in array|
-
 Parses a `.jason` file at the given path and returns a serde_json value object which can then be converted to structs
 
 ##  License

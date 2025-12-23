@@ -327,6 +327,12 @@ impl Lexer {
                     match next {
                         ':' => {
                             self.next();
+                            if let Some(next) = self.get_direct_next() {
+                                if next == '=' {
+                                    self.next();
+                                    return self.new_token(TokenType::SpiderWalrus, format!("::="))
+                                }
+                            }
                             return self.new_token(TokenType::DoubleColon, format!("::"))
                         },
                         '=' => {

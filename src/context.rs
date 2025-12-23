@@ -164,16 +164,49 @@ impl Context {
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
             let left = &left_node;
             let right = &right_node;
-            if left.token.token_type != TokenType::ID {
-                return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
+            #[allow(unused)]
+            let mut var_name:String = "".to_string();
+
+            let mut typed:Option<JasonType> = None;
+            match &left.token.token_type {
+                TokenType::ID => {
+                    var_name = left.token.plain();
+                },
+                TokenType::Colon => {
+                    if let (Some(inner_left), Some(inner_right)) = (left.left.as_ref(), left.right.as_ref()) {
+                        var_name = inner_left.token.plain();
+                        typed = Some(self.to_type(&inner_right)?); 
+                    } else {
+                        return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
+                            format!("Type def is missing left and or right side! {} : {}",
+                            left.token.plain(),
+                            right.token.plain()))
+                        )
+
+                    } 
+                    
+                },
+                _ => return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                     format!("[ERROR] {} = {}, variable name must be a valid identifier!",
                         left.token.plain(),
-                        right.token.plain())));
-            }
+                        right.token.plain())))
+            };
 
             let right_value = self.to_json(right)?.ok_or_else(||
                 JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), None,"right value is None"))?;
-            let var_name = left.token.plain();
+            
+            if let Some(var_type) = typed {
+                if self.variable_types.contains_key(&var_name) {
+                    return Err(
+                        self.err(
+                            JasonErrorKind::TypeError(var_name.clone()),
+                            format!("Type already exists for {}", var_name)
+                        )
+                    )
+                }
+
+                self.variable_types.insert(var_name.clone(), var_type.clone());
+            }
 
             if self.variable_types.contains_key(&var_name) {
                 let infered_type = self.infer_type_from(&right_value)?;
@@ -220,6 +253,33 @@ impl Context {
         }
         Ok(None)
     }
+
+    pub fn eval_spiderwalrus(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
+            let left = &left_node;
+            let right = &right_node;
+            if left.token.token_type != TokenType::ID {
+                return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
+                    format!("[ERROR] {} = {}, variable name must be a valid identifier!",
+                        left.token.plain(),
+                        right.token.plain())));
+            }
+
+            let right_type = self.to_type(right)?;
+            let var_name = left.token.plain();
+
+            if self.variable_types.contains_key(&var_name) {
+                return Err(self.err(
+                    JasonErrorKind::TypeError(var_name.clone()),
+                    format!("cannot reassign type of {}, existing type is, {}", var_name, self.variable_types.get(&var_name).unwrap())
+                ))
+            }
+            self.variable_types.insert(var_name.clone(), right_type);
+        }
+        Ok(None)
+    }
+
+
     
     pub fn eval_from(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
@@ -368,6 +428,7 @@ impl Context {
        let left = self.to_json(node.left.as_ref().ok_or_else(||
             JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
             JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
+
         let right = self.to_json(node.right.as_ref().ok_or_else(||
             JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
             JasonError::new(JasonErrorKind::ValueError,self.source_path.clone(), self.local_root.clone(), "right value is None"))?;
@@ -460,13 +521,34 @@ impl Context {
             Value::Array(a) => {
                 
                 if a.is_empty() {
-                    return Ok(Some(serde_json::Value::Array(Vec::new())));
+                    return Err(
+                        JasonError::new(
+                            JasonErrorKind::IndexError, 
+                            self.source_path.clone(), 
+                            self.local_root.clone(), 
+                            format!("unable to pick from array with no elements")
+                        )
+                    )
+
                 }
 
                 let mut result:Vec<serde_json::Value> = Vec::with_capacity(count);
                 
-                for _ in 0..count {
+                if count == 1 {
+                    let index = rand::rng().random_range(0..a.len());
 
+                    let value = a.get(index).ok_or_else(|| JasonError::new(
+                            JasonErrorKind::IndexError, 
+                            self.source_path.clone(), 
+                            self.local_root.clone(), 
+                            format!("unable to index array while picking with values {}", count)
+                        )
+                    )?.clone();
+
+                    return Ok(Some(value)); 
+                }
+
+                for _ in 0..count {
                     let index = rand::rng().random_range(0..a.len());
 
                     let value = a.get(index).ok_or_else(|| JasonError::new(
@@ -517,9 +599,6 @@ impl Context {
         match left {
             // [a, b, c, ...] at 0 -> a
             Value::Array(a) => { 
-                if a.is_empty() {
-                    return Ok(Some(serde_json::Value::Array(Vec::new())));
-                }
 
                 if count > a.len() {
                     return Err(
@@ -530,6 +609,20 @@ impl Context {
                             format!("unable to use upick operaton when count {} is larger than the count of elements {}", count, a.len())
                         )
                     )
+                }
+
+                if count == 1 {
+                    let index = rand::rng().random_range(0..a.len());
+
+                    let value = a.get(index).ok_or_else(|| JasonError::new(
+                            JasonErrorKind::IndexError, 
+                            self.source_path.clone(), 
+                            self.local_root.clone(), 
+                            format!("unable to index array while picking with values {}", count)
+                        )
+                    )?.clone();
+
+                    return Ok(Some(value)); 
                 }
 
                 let mut result:Vec<serde_json::Value> = Vec::with_capacity(count);
@@ -674,7 +767,6 @@ impl Context {
                         typed_value
                     )
                 );
-
                 Ok(None)
             },
             _ => {
@@ -686,8 +778,240 @@ impl Context {
                 )
             }
         }
-
     }
+
+    pub fn eval_string_conversion(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        if let TokenType::StringConverion(args) = &node.token.token_type {
+            let args:Vec<ASTNode> = args.to_nodes()?;
+
+            let inner_value = args.get(0).ok_or_else(|| 
+                JasonError::new(
+                    JasonErrorKind::ValueError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("needs an inner value to convert from")
+                )
+            )?;
+            
+            let value = self.to_json(inner_value)?.ok_or_else(|| 
+                JasonError::new(
+                    JasonErrorKind::ConversionError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("failed to evaluate value into string")
+                )
+            )?;
+            
+            let result = match value {
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => b.to_string(),
+                Value::Null => String::from("null"),
+                v => return Err(JasonError::new(
+                    JasonErrorKind::ConversionError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("Cannot convert type {} into string", v)
+                ))
+            };
+
+            Ok(Some(Value::String(result)))
+        }else {
+            Err(
+                self.err(JasonErrorKind::Custom, format!("reached string conversion from not string conversion"))
+            )
+        }
+    }
+
+
+    pub fn eval_int_conversion(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        if let TokenType::IntConverion(args) = &node.token.token_type {
+            let args:Vec<ASTNode> = args.to_nodes()?;
+
+            let inner_value = args.get(0).ok_or_else(|| 
+                JasonError::new(
+                    JasonErrorKind::ValueError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("needs an inner value to convert from")
+                )
+            )?;
+            
+            let value = self.to_json(inner_value)?.ok_or_else(|| 
+                JasonError::new(
+                    JasonErrorKind::ConversionError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("failed to evaluate value into int")
+                )
+            )?;
+
+            if let Some(second_value) = args.get(1) {
+
+                let second_value = self.to_json(second_value)?.ok_or_else(|| 
+                    JasonError::new(
+                        JasonErrorKind::ConversionError, 
+                        self.source_path.clone(), 
+                        self.local_root.clone(), 
+                        format!("Values for int(a, b) must be of Number")
+                    )
+                )?;
+
+
+                if let (Value::Number(min), Value::Number(max)) = (&value, second_value) {                    
+                    let mut rng = rand::rng();
+                    let min = min.as_f64().ok_or_else(||
+                        self.err(JasonErrorKind::ConversionError, format!("failed to convert argument one in {} into float", node.plain_sum)))? as i64;
+
+                    let max = max.as_f64().ok_or_else(||
+                        self.err(JasonErrorKind::ConversionError, format!("failed to convert argument two in {} into float", node.plain_sum)))? as i64;
+
+                    let int_rand = rng.random_range(min..=max);
+                
+                    return Ok(
+                        Some(
+                            Value::Number(
+                                int_rand.into()
+                            )
+                        )
+                    );
+                }
+            }
+
+            
+            let result:i64 = match &value {
+                Value::Number(n) => Number::as_f64(n).ok_or_else(||
+                    self.err(
+                            JasonErrorKind::ConversionError, 
+                            format!("failed to convert {} to int", value.clone().to_string()
+                        )
+                    )
+                )? as i64,
+                Value::String(s) => s.parse::<f64>()
+                    .map_err( |_|
+                        self.err(
+                                JasonErrorKind::ConversionError, 
+                                format!("failed to convert {} to int", value.to_string())
+                        )
+                    )? as i64,
+                Value::Bool(b) => if *b {1} else {0},
+                v => return Err(JasonError::new(
+                    JasonErrorKind::ConversionError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("Cannot convert type {} into string", v)
+                ))
+            };
+
+            Ok(Some(Value::Number(result.into())))
+        }else {
+            Err(
+                self.err(JasonErrorKind::Custom, format!("reached string conversion from not string conversion"))
+            )
+        }
+    }
+
+
+    pub fn eval_float_conversion(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        if let TokenType::FloatConverion(args) = &node.token.token_type {
+            let args:Vec<ASTNode> = args.to_nodes()?;
+
+            let inner_value = args.get(0).ok_or_else(|| 
+                JasonError::new(
+                    JasonErrorKind::ValueError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("needs an inner value to convert from")
+                )
+            )?;
+            
+            let value = self.to_json(inner_value)?.ok_or_else(|| 
+                JasonError::new(
+                    JasonErrorKind::ConversionError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("failed to evaluate value into int")
+                )
+            )?;
+
+            if let Some(second_value) = args.get(1) {
+
+                let second_value = self.to_json(second_value)?.ok_or_else(|| 
+                    JasonError::new(
+                        JasonErrorKind::ConversionError, 
+                        self.source_path.clone(), 
+                        self.local_root.clone(), 
+                        format!("Values for int(a, b) must be of Number")
+                    )
+                )?;
+
+
+                if let (Value::Number(min), Value::Number(max)) = (&value, second_value) {                    
+                    let mut rng = rand::rng();
+                    let min = min.as_f64().ok_or_else(||
+                        self.err(JasonErrorKind::ConversionError, format!("failed to convert argument one in {} into float", node.plain_sum)))?;
+                    let max = max.as_f64().ok_or_else(||
+                        self.err(JasonErrorKind::ConversionError, format!("failed to convert argument two in {} into float", node.plain_sum)))?;
+
+                    let rand:f64 = rng.random_range(min..=max);
+                    return Ok(
+                        Some(
+                            Value::Number(
+                                Number::from_f64(rand).ok_or_else(|| 
+                                    self.err(
+                                        JasonErrorKind::ConversionError,
+                                        format!("failed to convert random number into serde_json Number")
+                                    )
+                                )?
+                            )
+                        )
+                    );
+                }
+            }
+
+            
+            let result:f64 = match &value {
+                Value::Number(n) => n.as_f64().ok_or_else(||
+                    self.err(
+                            JasonErrorKind::ConversionError, 
+                            format!("failed to convert {} to int", value.clone().to_string()
+                        )
+                    )
+                )?,
+                Value::String(s) => s.parse::<f64>()
+                    .map_err( |_|
+                        self.err(
+                                JasonErrorKind::ConversionError, 
+                                format!("failed to convert {} to int", value.to_string())
+                        )
+                    )?,
+                Value::Bool(b) => if *b {1.0} else {0.0},
+                v => return Err(JasonError::new(
+                    JasonErrorKind::ConversionError, 
+                    self.source_path.clone(), 
+                    self.local_root.clone(), 
+                    format!("Cannot convert type {} into string", v)
+                ))
+            };
+
+            Ok(
+                Some(
+                    Value::Number(
+                        Number::from_f64(result).ok_or_else(|| 
+                            self.err(
+                                JasonErrorKind::ConversionError,
+                                format!("failed to convert random number into serde_json Number")
+                            )
+                        )?
+                    )
+                )
+            )
+        }else {
+            Err(
+                self.err(JasonErrorKind::Custom, format!("reached string conversion from not string conversion"))
+            )
+        }
+    }
+
 
     pub fn to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         match &node.token.token_type {
@@ -700,41 +1024,9 @@ impl Context {
             TokenType::Pick => self.eval_pick(node),
             TokenType::UPick => self.eval_upick(node),
             TokenType::DoubleColon => self.eval_double_colon(node),
-            TokenType::StringConverion(args) => {
-                let args:Vec<ASTNode> = args.to_nodes()?;
-
-                let inner_value = args.get(0).ok_or_else(|| 
-                    JasonError::new(
-                        JasonErrorKind::ValueError, 
-                        self.source_path.clone(), 
-                        self.local_root.clone(), 
-                        format!("needs an inner value to convert from")
-                    )
-                )?;
-                
-                let value = self.to_json(inner_value)?.ok_or_else(|| 
-                    JasonError::new(
-                        JasonErrorKind::ConversionError, 
-                        self.source_path.clone(), 
-                        self.local_root.clone(), 
-                        format!("failed to evaluate value into string")
-                    )
-                )?;
-                
-                let result = match value {
-                    Value::Number(n) => n.to_string(),
-                    Value::Bool(b) => b.to_string(),
-                    Value::Null => String::from("null"),
-                    v => return Err(JasonError::new(
-                        JasonErrorKind::ConversionError, 
-                        self.source_path.clone(), 
-                        self.local_root.clone(), 
-                        format!("Cannot convert type {} into string", v)
-                    ))
-                };
-
-                Ok(Some(Value::String(result)))
-            },
+            TokenType::StringConverion(_) => self.eval_string_conversion(node),
+            TokenType::IntConverion(_) => self.eval_int_conversion(node),
+            TokenType::FloatConverion(_) => self.eval_float_conversion(node),
             TokenType::ID => {
                 if !self.variables.contains_key(&node.token.plain()) {
                     return Err(JasonError::new(JasonErrorKind::UndefinedVariable(node.token.plain()), self.source_path.clone(),self.local_root.clone(),
@@ -756,6 +1048,9 @@ impl Context {
             },
             TokenType::Equals => self.eval_equal(node),
             TokenType::Narwhal => self.eval_narwhal(node),
+            //TokenType::SpiderWalrus => self.eval_spiderwalrus(node),
+
+            TokenType::SpiderWalrus => self.eval_spiderwalrus(node),
             TokenType::StringLiteral(s) => Ok(Some(serde_json::Value::String(s.to_string()))), 
             TokenType::List(args) => {
                 let json_values: Vec<Value> = args.to_nodes()?
@@ -816,7 +1111,7 @@ impl Context {
             },
             token => {
                 Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
-                    format!("Unknown token: {:?}", token)))
+                    format!("Unexpected token: {:?}", token)))
             }
         }
     }

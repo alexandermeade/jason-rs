@@ -38,7 +38,36 @@ impl Context {
             TokenType::BoolType     => Ok(JasonType::Bool),
             TokenType::AnyType      => Ok(JasonType::Any),
             TokenType::NullType     => Ok(JasonType::Null),
+            TokenType::Bar          => {
+                let left = node.left.as_ref().ok_or_else(||
+                    self.err(
+                        JasonErrorKind::MissingValue,
+                        format!("missing left side of bar expression")
+                    )
+                )?;
 
+                let right = node.right.as_ref().ok_or_else(||
+                    self.err(
+                        JasonErrorKind::MissingValue,
+                        format!("missing right side of bar expression")
+                    )
+                )?;
+
+                
+                let left_type:JasonType = self.to_type(&left)?;
+                let right_type:JasonType = self.to_type(&right)?;
+                
+                Ok(match (left_type, right_type) {
+                    (typ, JasonType::Union(mut args)) |
+                    (JasonType::Union(mut args), typ)  => {
+                        args.push(Box::new(typ));
+                        JasonType::Union(args) 
+                    },
+                    (typ1, typ2) => {
+                        JasonType::Union(vec![Box::new(typ1), Box::new(typ2)])
+                    }, 
+                })
+            },
             TokenType::Block(args)  => {
                 let nodes = args.to_nodes()?;
                 let mut map:HashMap<String, JasonType> = HashMap::new(); // this will become our typed Object
@@ -64,50 +93,30 @@ impl Context {
             },
 
             TokenType::List(values) => {
-                if values.len() > 1 {
-                    return Err(
-                        JasonError::new(
-                            JasonErrorKind::Custom, 
-                            self.source_path.clone(), 
-                            self.local_root.clone(), 
-                            format!("Cannot build Type list with more than one Type. \n Hint: use a Union Type Instead")
-                        )
-                    )
+                if values.is_empty() {
+                    return Ok(JasonType::List(Box::new(JasonType::Any)));
+                }
+                //collect inner types as a union and then propogate that as the type
+                let mut inner_types = vec![];
+                for node in values.to_nodes()? {
+                    let t = self.to_type(&node)?;
+                    inner_types.push(Box::new(t));
                 }
 
-                if values.len() < 1 {
-                    return Err(
-                        JasonError::new(
-                            JasonErrorKind::Custom, 
-                            self.source_path.clone(), 
-                            self.local_root.clone(), 
-                            format!("To build Type list you must supply at least one Type. \n Hint: [T]")
-                        )
-                    )
-                }
+                let inner_type = if inner_types.len() == 1 {
+                    inner_types.remove(0)
+                } else {
+                    Box::new(JasonType::Union(inner_types))
+                };
 
-                let value_type = self.to_type(
-                    values
-                    .to_nodes()?
-                    .get(0)
-                    .ok_or_else(|| 
-                        JasonError::new(
-                            JasonErrorKind::Custom, 
-                            self.source_path.clone(), 
-                            self.local_root.clone(), 
-                            format!("Failed to unwrap Inner type")
-                        )
-                    )?
-                )?; 
-                
-                Ok(value_type)
-            },
+                Ok(JasonType::List(inner_type))
+            }
             _ => Err(
                 JasonError::new(
                     JasonErrorKind::ValueError, 
                     self.source_path.clone(), 
                     self.local_root.clone(), 
-                    format!("unknown token when evaluating type")   
+                    format!("unexpected token {:?} when evaluating type", node.token.token_type)   
                 )
             ) 
         }
@@ -129,7 +138,7 @@ impl Context {
                     .collect(); 
                 
                 match infered_types.len() {
-                    0 => Ok(JasonType::Any),
+                    0 => Ok(JasonType::List(Box::new(JasonType::Any))),
                     1 => Ok(JasonType::List(Box::new(infered_types.remove(0)))),
                     _ => Ok(JasonType::List(
                             Box::new(

@@ -50,6 +50,7 @@ pub enum TokenType {
     // Math Symbols
     Equals,
     Narwhal,
+    SpiderWalrus,
     Plus,
     Minus,
     Mult,
@@ -64,6 +65,8 @@ pub enum TokenType {
     GreaterThan,
     // keywords
     StringConverion(Args),
+    IntConverion(Args),
+    FloatConverion(Args),
     UPick,
     Pick,
     From,
@@ -100,7 +103,7 @@ impl TokenType {
             "Number" => TokenType::NumberType,
             "Bool"   => TokenType::BoolType,
             "Any"    => TokenType::AnyType,
-            "Null"   => TokenType::Null,
+            "Null"   => TokenType::NullType,
             "true" => TokenType::BoolLiteral(true),
             "false" => TokenType::BoolLiteral(false),
             "const" => TokenType::Const,
@@ -232,6 +235,8 @@ impl Token {
                 "import" => Token::new(TokenType::Import(args), name.to_string(), row, colmn),
                 "export" => Token::new(TokenType::Export(args), name.to_string(), row, colmn),
                 "str" => Token::new(TokenType::StringConverion(args), name.to_string(), row, colmn),
+                "int" => Token::new(TokenType::IntConverion(args), name.to_string(), row, colmn),
+                "float" => Token::new(TokenType::FloatConverion(args), name.to_string(), row, colmn),
                 "map" => Token::new(TokenType::Map(args), name.to_string(), row, colmn),
                 "use" => Token::new(TokenType::Use(args), name.to_string(), row, colmn),
                 _ => self,
@@ -284,6 +289,8 @@ impl Token {
             | TokenType::Import(args)
             | TokenType::Export(args)
             | TokenType::StringConverion(args)
+            | TokenType::IntConverion(args)
+            | TokenType::FloatConverion(args)
             | TokenType::Use(args) => {
                 let args_str = args.as_string_tuple();
                 format!("{}{}", self.plain, args_str)
@@ -347,6 +354,7 @@ impl Token {
             // ===== Operators =====
             TokenType::Equals => "=".to_string(),
             TokenType::Narwhal => ":=".to_string(),
+            TokenType::SpiderWalrus => "::=".to_string(),
             TokenType::Plus   => "+".to_string(),
             TokenType::Minus  => "-".to_string(),
             TokenType::Mult   => "*".to_string(),

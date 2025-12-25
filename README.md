@@ -128,11 +128,9 @@ note: this will not import the context around DEV so variables will be ignored u
 
 ## + operator 
 
-Ah! Got it — you want a full written explanation, not a table, and all in one cohesive section suitable for README.md. Here’s a polished version you can paste directly:
-
 ## The `+` Operator
 
-The `+` operator in Jason is **overloaded** and behaves differently depending on the types of the operands. It works with **objects**, **arrays**, and **strings**.
+The `+` operator is **overloaded** and behaves differently depending on the types of the operands. It works with **objects**, **arrays**, and **strings**.
 
 ### Object Concatenation
 
@@ -143,25 +141,27 @@ When both operands are objects (`{...} + {...}`), the operator **merges them int
 ```jason
 {name: "Alex"} + {age: 20}       // yields {name: "Alex", age: 20}
 {a: 1, b: 2} + {b: 3, c: 4}     // yields {a: 1, b: 3, c: 4}
-
+```
 Array Concatenation
+
+### Object Concatenation
 
 When both operands are arrays ([...] + [...]), the operator joins the two arrays into a single array, with elements from the left-hand array appearing first, followed by elements from the right-hand array.
 
 Examples:
-
+```
 [1, 2, 3] + [4, 5]             // yields [1, 2, 3, 4, 5]
 ["a"] + ["b", "c"]             // yields ["a", "b", "c"]
-
-String Concatenation
+```
+### Object Concatenation
 
 When both operands are strings ("..." + "..."), the operator joins them into a single string. Jason strings support Unicode, so you can concatenate emoji, symbols, or other characters.
 
 Examples:
-
+```
 "hello" + " world"             // yields "hello world"
 "😀" + "🚀"                      // yields "😀🚀"
-
+```
 
 Side note: Jason supports composite strings, which interpolate variables or expressions inside a string, e.g., "Hello, {name}!". Composite strings can be concatenated with other strings in the same way as regular strings:
 

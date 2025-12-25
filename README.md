@@ -22,7 +22,7 @@ Add `jason-rs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-jason-rs = "0.2.5"
+jason-rs = "0.3.2"
 ```
 
 Parse a Jason file:

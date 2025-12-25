@@ -296,7 +296,7 @@ Error: Lua Function Error in file ./main.jason on line 8: failed to find functio
 | `name() {...}` | Defines a template  |
 | `name = ...` | Defines a variable name and sets the value to the result of the right hand expression |
 | `name := ...` | functions like the `=` operator except it infers a type onto `name`|
-| `name ::= T` | functions like the `:=` operator except it assignes a direct type onto `name` without giving it a value|
+| `name ::= T` | functions like the `:=` operator except it assignes a direct type onto `name` without giving it a value this symbol has been dubbed the spider walrus|
 | `name: T = ...` | Defines a variable name and sets the value to the result of the right hand expression and the Type to the right hand side of the `:` operator|
 | `name(...)` | invokes a template |
 | `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|

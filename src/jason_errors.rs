@@ -13,7 +13,7 @@ pub enum JasonErrorKind {
     TypeError(String),
     FileError,
     ContextError,
-    InvalidOperation,
+    InvalidOperation(String),
     MissingNode,
     ConversionError,
     Custom,
@@ -136,7 +136,7 @@ impl JasonError {
             JasonErrorKind::SyntaxError => "Syntax Error",
             JasonErrorKind::ValueError => "Value Error",
             JasonErrorKind::TypeError(_) => "Type Error",
-            JasonErrorKind::InvalidOperation => "Invalid Operation",
+            JasonErrorKind::InvalidOperation(_) => "Invalid Operation",
             JasonErrorKind::MissingNode => "Missing Node",
             JasonErrorKind::ConversionError => "Conversion Error",
             JasonErrorKind::Custom => "Custom Error",
@@ -220,8 +220,8 @@ impl std::fmt::Display for JasonError {
                     println!("{:>5}", highlight_string(&code_line, "*ALL*"));
                 },
 
-                JasonErrorKind::InvalidOperation => {
-                    println!("{:>5}", highlight_string(&code_line, "*ALL*"));
+                JasonErrorKind::InvalidOperation(var) => {
+                    println!("{:>5}", highlight_string(&code_line, var));
                 },
                 _ =>  println!("{:>5}", highlight_string(&code_line, "*ALL*"))
             }

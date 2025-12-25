@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::collections::hash_map::HashMap;
 use serde_json::{Value};
 
-use crate::token::ArgsToNode;
 use crate::astnode::ASTNode;
 use crate::jason_errors::{JasonError, JasonErrorKind, JasonResult};
 use crate::context::Context;
@@ -12,6 +11,8 @@ use crate::token::TokenType;
 pub enum JasonType {
     String,
     Number,
+    Int,
+    Float,
     Bool,
     Null,
     Any,
@@ -34,6 +35,8 @@ impl Context {
                 )?.clone()
             ),
             TokenType::StringType   => Ok(JasonType::String),
+            TokenType::IntType      => Ok(JasonType::Int),
+            TokenType::FloatType    => Ok(JasonType::Float),
             TokenType::NumberType   => Ok(JasonType::Number),
             TokenType::BoolType     => Ok(JasonType::Bool),
             TokenType::AnyType      => Ok(JasonType::Any),
@@ -69,7 +72,7 @@ impl Context {
                 })
             },
             TokenType::Block(args)  => {
-                let nodes = args.to_nodes()?;
+                let nodes = args;
                 let mut map:HashMap<String, JasonType> = HashMap::new(); // this will become our typed Object
                 for node in nodes {
                     if node.token.token_type == TokenType::Colon {
@@ -98,7 +101,7 @@ impl Context {
                 }
                 //collect inner types as a union and then propogate that as the type
                 let mut inner_types = vec![];
-                for node in values.to_nodes()? {
+                for node in values {
                     let t = self.to_type(&node)?;
                     inner_types.push(Box::new(t));
                 }
@@ -125,7 +128,12 @@ impl Context {
     pub fn infer_type_from(&mut self, value: &serde_json::Value) -> JasonResult<JasonType> { 
         match value { 
             Value::String(_) => return Ok(JasonType::String),
-            Value::Number(_) => return Ok(JasonType::Number),
+            Value::Number(n) => {
+                if n.is_i64() {
+                    return Ok(JasonType::Int)
+                }
+                return Ok(JasonType::Float)
+            }
             Value::Null => return Ok(JasonType::Null),
             Value::Bool(_) => return Ok(JasonType::Bool),
 
@@ -183,6 +191,8 @@ impl JasonType {
 
             JasonType::String => value.is_string(),
             JasonType::Number => value.is_number(),
+            JasonType::Int => value.is_i64(),
+            JasonType::Float => value.is_f64(),
             JasonType::Bool => value.is_boolean(),
             JasonType::Null => value.is_null(),
 
@@ -209,6 +219,61 @@ impl JasonType {
             }
         }
     }
+
+    pub fn diff_objects(expected: &BTreeMap<String, JasonType>, found: &BTreeMap<String, JasonType>) -> String {
+        let mut result = String::new();
+        
+        let mut missing_keys: Vec<&String> = expected.keys()
+            .filter(|k| !found.contains_key(*k))
+            .collect();
+        missing_keys.sort();
+        
+        let mut extra_keys: Vec<&String> = found.keys()
+            .filter(|k| !expected.contains_key(*k))
+            .collect();
+        extra_keys.sort();
+        
+        let mut different_types: Vec<(&String, &JasonType, &JasonType)> = expected.iter()
+            .filter_map(|(k, v)| {
+                found.get(k).and_then(|found_v| {
+                    if v != found_v {
+                        Some((k, v, found_v))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        different_types.sort_by_key(|(k, _, _)| *k);
+        
+        if !missing_keys.is_empty() {
+            result.push_str("\n  Missing fields:\n");
+            for key in missing_keys {
+                result.push_str(&format!("    - {}: {}\n", key, expected.get(key).unwrap()));
+            }
+        }
+        
+        if !extra_keys.is_empty() {
+            result.push_str("\n  Extra fields:\n");
+            for key in extra_keys {
+                result.push_str(&format!("    + {}: {}\n", key, found.get(key).unwrap()));
+            }
+        }
+        
+        if !different_types.is_empty() {
+            result.push_str("\n  Type mismatches:\n");
+            for (key, expected_type, found_type) in different_types {
+                result.push_str(&format!("    ~ {}: expected {}, found {}\n", key, expected_type, found_type));
+            }
+        }
+        
+        if result.is_empty() {
+            result.push_str("  (no differences)");
+        }
+        
+        result
+    }
+
 }
 
 use std::fmt;
@@ -218,6 +283,8 @@ impl fmt::Display for JasonType {
         match self {
             JasonType::String => write!(f, "String"),
             JasonType::Number => write!(f, "Number"),
+            JasonType::Int => write!(f, "Int"),
+            JasonType::Float => write!(f, "Float"),
             JasonType::Bool   => write!(f, "Bool"),
             JasonType::Null   => write!(f, "Null"),
             JasonType::Any    => write!(f, "Any"),
@@ -254,6 +321,7 @@ impl fmt::Display for JasonType {
             }
         }
     }
+
 }
 
 

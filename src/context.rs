@@ -1,11 +1,11 @@
 use crate::{
-    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, jason_types::JasonType, lua_instance::LuaInstance, template::Template, token::{ArgsToNode, Token, TokenType}
+    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, jason_types::JasonType, lua_instance::LuaInstance, template::Template, token::{TokenType}
 };
 
 use std::{collections::HashMap};
 use mlua::Table;
 use rand::Rng;
-use serde_json::{Value, Number, Map};
+use serde_json::{Map, Number, Value};
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::jason_hidden;
@@ -75,89 +75,169 @@ impl Context {
         self.local_root = None;
     }
     //repeat and evaluate
-    fn repeat_value(&mut self, count: String, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
-        let count = count.parse::<f64>().map_err(|_| 
-            JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse num {}", count)))?;
-        let bound:usize = count as usize;
-        let mut result: Vec<Value> = Vec::with_capacity(bound);
-        for _ in 0..bound{
+    fn repeat_value(&mut self, count: &i64, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        
+        if *count < 0 {
+            return Err(
+                JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"Count must be positive")
+            );  
+        }
+
+        let mut result: Vec<Value> = Vec::with_capacity(*count as usize);
+        for _ in 0..*count{
             let value = self.to_json(repeated_node)?.ok_or_else(||
                 JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"value is None"))?;
             result.push(value);
         }
         return Ok(Some(Value::Array(result)));
     }
+
     //repeat and don't evaluate
-    fn dumb_repeat_value(&mut self, count: String, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
-        let count = count.parse::<f64>().map_err(|_| 
-            JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse num {}", count)))?;
-        let bound:usize = count as usize;
-        let mut result: Vec<Value> = Vec::with_capacity(bound);
+    fn dumb_repeat_value(&mut self, count: &i64, repeated_node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        
+        if *count < 0 {
+            return Err(
+                JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"Count must be positive")
+            ); 
+        }
+
+        let mut result: Vec<Value> = Vec::with_capacity(*count as usize);
 
         let value = self.to_json(repeated_node)?.ok_or_else(||
             JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"value is None"))?;
-        for _ in 0..bound{
+        for _ in 0..*count{
             result.push(value.clone());
         }
         return Ok(Some(Value::Array(result)));
     }
 
-    fn eval_mult(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
-        // Repeat operations: expression * n or n * expression
-        if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
-            match (&left_node.token.token_type, &right_node.token.token_type) {
-                (_, TokenType::ID) => {
-                    let eval_variable = self.to_json(right_node)?.unwrap();                    
-                    return self.repeat_value(eval_variable.to_string(), &left_node);
-                }
-                (TokenType::ID, _) => {
-                    let eval_variable = self.to_json(left_node)?.unwrap();                    
-                    return self.repeat_value(eval_variable.to_string(), &right_node);
-                }
-
-                // Left-sided: expression * n
-                (_, TokenType::NumberLiteral(num)) => {
-                    return self.repeat_value(num.clone(), &left_node);
-                }
-                // Right-sided: n * expression
-                (TokenType::NumberLiteral(num), _) => {
-                    return self.repeat_value(num.clone(), &right_node);
-                }
-                _ => return Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(), 
-                    "invalid operation"))
-            }
+    fn extract_repeat_count(&self, value: serde_json::Value) -> JasonResult<i64> {
+        match value {
+            Value::Number(n) => n.as_i64().ok_or_else(|| {
+                JasonError::new(
+                    JasonErrorKind::InvalidOperation(n.to_string()),
+                    self.source_path.clone(),
+                    self.local_root.clone(),
+                    "repeat count must be of type int ",
+                )
+            }),
+            v => Err(JasonError::new(
+                JasonErrorKind::InvalidOperation(self.value_to_string(&v)?),
+                self.source_path.clone(),
+                self.local_root.clone(),
+                "repeat count must be of type Int",
+            )),
         }
-        Err(JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(), self.local_root.clone(),
-            format!("repeat statement failed")))
     }
 
-    fn eval_repeat(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
-        // Repeat operations: expression * n or n * expression
-        if let (Some(left_node), Some(right_node)) = (node.left.as_ref(), node.right.as_ref()) {
-            match (&left_node.token.token_type, &right_node.token.token_type) {
-                (_, TokenType::ID) => {
-                    let eval_variable = self.to_json(right_node)?.unwrap();                    
-                    return self.dumb_repeat_value(eval_variable.to_string(), &left_node);
-                }
-                (TokenType::ID, _) => {
-                    let eval_variable = self.to_json(left_node)?.unwrap();                    
-                    return self.dumb_repeat_value(eval_variable.to_string(), &right_node);
-                }
 
-                // Left-sided: expression * n
-                (_, TokenType::NumberLiteral(num)) => {
-                    return self.dumb_repeat_value(num.clone(), &left_node);
+    fn eval_mult(&mut self, node: &ASTNode) -> JasonResult<Option<Value>> {
+        let (left, right) = match (node.left.as_ref(), node.right.as_ref()) {
+            (Some(l), Some(r)) => (l, r),
+            _ => {
+                return Err(JasonError::new(
+                    JasonErrorKind::MissingValue,
+                    self.source_path.clone(),
+                    self.local_root.clone(),
+                    "repeat statement failed",
+                ))
+            }
+        };
+
+        match (&left.token.token_type, &right.token.token_type) {
+            // expression * ID
+            (_, TokenType::ID) => {
+                let value = self.to_json(right)?.ok_or_else(|| {
+                    JasonError::new(
+                        JasonErrorKind::MissingValue,
+                        self.source_path.clone(),
+                        self.local_root.clone(),
+                        "missing repeat value",
+                    )
+                })?;
+
+                let n = self.extract_repeat_count(value)?;
+                self.repeat_value(&n, left)
+            }
+
+            // ID * expression
+            (TokenType::ID, _) => {
+                let value = self.to_json(left)?.ok_or_else(|| {
+                    JasonError::new(
+                        JasonErrorKind::MissingValue,
+                        self.source_path.clone(),
+                        self.local_root.clone(),
+                        "missing repeat value",
+                    )
+                })?;
+
+                let n = self.extract_repeat_count(value)?;
+                self.repeat_value(&n, right)
+            }
+
+            // expression * literal
+            (_, TokenType::IntLiteral(num)) => self.repeat_value(num, left),
+
+            // literal * expression
+            (TokenType::IntLiteral(num), _) => self.repeat_value(num, right),
+
+            (TokenType::FloatLiteral(num), _) |
+            (_, TokenType::FloatLiteral(num)) => Err(JasonError::new(
+                JasonErrorKind::InvalidOperation(num.to_string()),
+                self.source_path.clone(),
+                self.local_root.clone(),
+                "Cannot repeat with a count of type float!",
+            )),
+
+
+            _ => Err(JasonError::new(
+                JasonErrorKind::InvalidOperation("*ALL*".to_string()),
+                self.source_path.clone(),
+                self.local_root.clone(),
+                "invalid repeat operation. ",
+            )),
+        }
+    }
+
+    fn eval_repeat(&mut self, node: &ASTNode) -> JasonResult<Option<Value>> {
+        let (left, right) = match (node.left.as_ref(), node.right.as_ref()) {
+            (Some(l), Some(r)) => (l, r),
+            _ => {
+                return Err(JasonError::new(
+                    JasonErrorKind::MissingValue,
+                    self.source_path.clone(),
+                    self.local_root.clone(),
+                    "repeat statement failed",
+                ))
+            }
+        };
+
+        match (&left.token.token_type, &right.token.token_type) {
+            // expression * n
+            (_, TokenType::IntLiteral(_) | TokenType::ID) => {
+                if let Some(res) = self.to_json(right)? {
+                    let n = self.extract_repeat_count(res)?;
+                    return self.dumb_repeat_value(&n, left);
                 }
-                // Right-sided: n * expression
-                (TokenType::NumberLiteral(num), _) => {
-                    return self.dumb_repeat_value(num.clone(), &right_node);
+            }
+
+            // n * expression
+            (TokenType::IntLiteral(_) | TokenType::ID, _) => {
+                if let Some(res) = self.to_json(left)? {
+                    let n = self.extract_repeat_count(res)?;
+                    return self.dumb_repeat_value(&n, right);
                 }
-                _ => return Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(), 
-                    "invalid operation"))
+            }
+
+            _ => {
             }
         }
-        Err(JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(), self.local_root.clone(),
-            format!("repeat statement failed")))
+        return Err(JasonError::new(
+            JasonErrorKind::InvalidOperation("*ALL*".to_string()),
+            self.source_path.clone(),
+            self.local_root.clone(),
+            "invalid repeat operation",
+        ));
     }
 
     pub fn eval_equal(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
@@ -309,7 +389,7 @@ impl Context {
                             Err(err)
                         },
                     }?;
-                    let args:Vec<String> = args.to_nodes()?.into_iter().map(|node| node.token.plain()).collect();
+                    let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
                     if args.contains(&"*".to_string()) {
                         let exports = context.export_all();
                         self.absorb_exports(exports);
@@ -324,7 +404,7 @@ impl Context {
                         return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), None,
                             "to import lua functions you must derive from a plain component I.E. use(...) from std\n note how std std is plain text and not in qoutes"));
                     }
-                    let args:Vec<String> = args.to_nodes()?.into_iter().map(|node| node.token.plain()).collect();                                     
+                    let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();                                     
                     for arg in &args {
                         let _ = self.import_from_base(arg);
                     }
@@ -343,7 +423,7 @@ impl Context {
     pub fn eval_lua_fn(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::LuaFnCall(args) = &node.token.token_type {
             // Convert to JSON first
-            let json_values: Vec<Value> = args.to_nodes()?
+            let json_values: Vec<Value> = args
                 .iter()
                 .map(|node| {
                     self.to_json(node)?
@@ -419,7 +499,7 @@ impl Context {
                 a.extend(b);
                 Ok(Some(Value::Object(a)))
             }
-            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation("*ALL*".to_string()), self.source_path.clone(), self.local_root.clone(),
                 format!("invalid + operation for values ", ))),
         }
     }
@@ -483,8 +563,8 @@ impl Context {
                 }).map(|v| Some(v.clone()))
             }
             // [{name: "alex", age: 20}, {name: "jason", age: 38} at each ["name"] -> ["alex", "jason"] 
-            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
-                format!("invalid + operation for values ", ))),
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation("*ALL*".to_string()), self.source_path.clone(), self.local_root.clone(),
+                format!("invalid at operation for values ", ))),
         }        
     }
 
@@ -563,8 +643,8 @@ impl Context {
 
                 return Ok(Some(serde_json::Value::Array(result)))
             },
-            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
-                format!("invalid + operation for values ", ))),
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation("*ALL*".to_string()), self.source_path.clone(), self.local_root.clone(),
+                format!("invalid pick operation for values ", ))),
         }        
     }
 
@@ -603,7 +683,7 @@ impl Context {
                 if count > a.len() {
                     return Err(
                         JasonError::new(
-                            JasonErrorKind::InvalidOperation, 
+                            JasonErrorKind::InvalidOperation(count.to_string()), 
                             self.source_path.clone(), 
                             self.local_root.clone(), 
                             format!("unable to use upick operaton when count {} is larger than the count of elements {}", count, a.len())
@@ -646,8 +726,8 @@ impl Context {
 
                 return Ok(Some(serde_json::Value::Array(result)))
             },
-            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation, self.source_path.clone(), self.local_root.clone(),
-                format!("invalid + operation for values ", ))),
+            v => Err(JasonError::new(JasonErrorKind::InvalidOperation(self.value_to_string(&v)?), self.source_path.clone(), self.local_root.clone(),
+                format!("invalid repeat operation for values ", ))),
         }        
     }
 
@@ -659,8 +739,8 @@ impl Context {
             JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?;
         
 
-        let args = match &node.token.token_type {
-            TokenType::Map(args) => args,
+        let mut args:Vec<ASTNode> = match &node.token.token_type {
+            TokenType::Map(args) => args.to_vec(),
             _ => return Err(
                  JasonError::new(
                     JasonErrorKind::ValueError, 
@@ -680,9 +760,9 @@ impl Context {
                     format!("left side of the operand must be of type List")
                 ))
         };
-        let mut flat_args: Vec<Token> = args.iter().flat_map(|v| v.iter().cloned()).collect();
+        //let mut flat_args: Vec<Token> = args.iter().flat_map(|v| v.iter().cloned()).collect();
 
-        if flat_args.is_empty() {
+        if args.is_empty() {
             return Err(JasonError::new(
                 JasonErrorKind::ValueError,
                 self.source_path.clone(),
@@ -691,9 +771,9 @@ impl Context {
             ));
         }
 
-        let argument = flat_args.remove(0).plain(); // first token
-        let index_argument = if !flat_args.is_empty() {
-            flat_args.remove(0).plain() // second token, if exists
+        let argument = args.remove(0).token.plain(); // first token
+        let index_argument = if !args.is_empty() {
+            args.remove(0).token.plain() // second token, if exists
         } else {
             "".to_string()
         };
@@ -755,7 +835,7 @@ impl Context {
             },
             TokenType::FnCall(args) => {
                 let typed_args = args
-                        .to_nodes()?
+                        
                         .iter()
                         .map(|e| self.to_type(e))
                         .collect::<JasonResult<Vec<JasonType>>>()?;
@@ -782,7 +862,7 @@ impl Context {
 
     pub fn eval_string_conversion(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::StringConverion(args) = &node.token.token_type {
-            let args:Vec<ASTNode> = args.to_nodes()?;
+            let args:&Vec<ASTNode> = args;
 
             let inner_value = args.get(0).ok_or_else(|| 
                 JasonError::new(
@@ -802,18 +882,8 @@ impl Context {
                 )
             )?;
             
-            let result = match value {
-                Value::Number(n) => n.to_string(),
-                Value::Bool(b) => b.to_string(),
-                Value::Null => String::from("null"),
-                v => return Err(JasonError::new(
-                    JasonErrorKind::ConversionError, 
-                    self.source_path.clone(), 
-                    self.local_root.clone(), 
-                    format!("Cannot convert type {} into string", v)
-                ))
-            };
-
+            let result = self.value_to_string(&value)?;
+            
             Ok(Some(Value::String(result)))
         }else {
             Err(
@@ -822,10 +892,31 @@ impl Context {
         }
     }
 
+    pub fn value_to_string(&self, value: &Value) -> JasonResult<String> {
+        match value {
+            Value::Number(n) => Ok(n.to_string()),
+            Value::Bool(b) => Ok(b.to_string()),
+            Value::String(s) => Ok(s.clone()),
+            Value::Array(v) => {
+                let mut result = String::from("[");
+                for element in v {
+                    let str_result = self.value_to_string(&element)?;
+                    result.push_str(&(str_result + ","));
+                }
+                result.pop();
+                result.push_str("]");
+                return Ok(result);
+            },
+            Value::Null => Ok(String::from("null")),
+            Value::Object(o) => Ok(serde_json::to_string(&Value::Object(o.clone()))
+    .unwrap_or_else(|_| "{}".to_string())),
+        }
+    }
+
 
     pub fn eval_int_conversion(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::IntConverion(args) = &node.token.token_type {
-            let args:Vec<ASTNode> = args.to_nodes()?;
+            let args:&Vec<ASTNode> = args;
 
             let inner_value = args.get(0).ok_or_else(|| 
                 JasonError::new(
@@ -877,32 +968,8 @@ impl Context {
                 }
             }
 
+            self.value_to_int(&value)
             
-            let result:i64 = match &value {
-                Value::Number(n) => Number::as_f64(n).ok_or_else(||
-                    self.err(
-                            JasonErrorKind::ConversionError, 
-                            format!("failed to convert {} to int", value.clone().to_string()
-                        )
-                    )
-                )? as i64,
-                Value::String(s) => s.parse::<f64>()
-                    .map_err( |_|
-                        self.err(
-                                JasonErrorKind::ConversionError, 
-                                format!("failed to convert {} to int", value.to_string())
-                        )
-                    )? as i64,
-                Value::Bool(b) => if *b {1} else {0},
-                v => return Err(JasonError::new(
-                    JasonErrorKind::ConversionError, 
-                    self.source_path.clone(), 
-                    self.local_root.clone(), 
-                    format!("Cannot convert type {} into string", v)
-                ))
-            };
-
-            Ok(Some(Value::Number(result.into())))
         }else {
             Err(
                 self.err(JasonErrorKind::Custom, format!("reached string conversion from not string conversion"))
@@ -911,9 +978,134 @@ impl Context {
     }
 
 
+    fn value_to_int(&self, value: &Value) -> JasonResult<Option<Value>> {
+        match value {
+            Value::Number(n) => {
+                let i = n.as_f64().ok_or_else(|| {
+                    self.err(
+                        JasonErrorKind::ConversionError,
+                        format!("failed to convert {} to int", value)
+                    )
+                })? as i64;
+                Ok(Some(Value::Number(Number::from(i))))
+            }
+
+            Value::String(s) => {
+                let i = s.parse::<i64>().map_err(|_| {
+                    self.err(
+                        JasonErrorKind::ConversionError,
+                        format!("failed to convert {} to int", value)
+                    )
+                })?;
+                Ok(Some(Value::Number(Number::from(i))))
+            }
+
+            Value::Bool(b) => {
+                let i = if *b { 1 } else { 0 };
+                Ok(Some(Value::Number(Number::from(i))))
+            }
+
+            Value::Array(a) => {
+                let mut new_arr = Vec::with_capacity(a.len());
+                for e in a {
+                    let value = self.value_to_int(&e)?.ok_or_else(||
+                        self.err(JasonErrorKind::ConversionError, format!("failed to convert {}", e))
+                    )?;
+                    new_arr.push(value);
+
+                }
+                Ok(Some(Value::Array(new_arr)))
+            }
+
+            v => Err(self.err(
+                JasonErrorKind::ConversionError,
+                format!("Cannot convert type {} into int", v)
+            )),
+        }
+    }
+
+    fn value_to_float(&self, value: &Value) -> JasonResult<Option<Value>> {
+        match value {
+            Value::Number(n) => {
+                let f = n.as_f64().ok_or_else(|| {
+                    self.err(
+                        JasonErrorKind::ConversionError,
+                        format!("failed to convert {} to float", value),
+                    )
+                })?;
+                Ok(Some(Value::Number(
+                    Number::from_f64(f).ok_or_else(|| {
+                        self.err(
+                            JasonErrorKind::ConversionError,
+                            "failed to convert number into serde_json Number".to_string(),
+                        )
+                    })?,
+                )))
+            }
+
+            Value::String(s) => {
+                let f = s.parse::<f64>().map_err(|_| {
+                    self.err(
+                        JasonErrorKind::ConversionError,
+                        format!("failed to convert {} to float", value),
+                    )
+                })?;
+                Ok(Some(Value::Number(
+                    Number::from_f64(f).ok_or_else(|| {
+                        self.err(
+                            JasonErrorKind::ConversionError,
+                            "failed to convert number into serde_json Number".to_string(),
+                        )
+                    })?,
+                )))
+            }
+
+            Value::Bool(b) => {
+                let f = if *b { 1.0 } else { 0.0 };
+                Ok(Some(Value::Number(
+                    Number::from_f64(f).ok_or_else(|| {
+                        self.err(
+                            JasonErrorKind::ConversionError,
+                            "failed to convert bool into serde_json Number".to_string(),
+                        )
+                    })?,
+                )))
+            }
+
+            Value::Array(a) => {
+                let mut new_arr = Vec::with_capacity(a.len());
+                for e in a {
+                    // compute string for error messages
+                    let s = self.value_to_string(e)?;
+                    let f = e.as_f64().ok_or_else(|| {
+                        self.err(
+                            JasonErrorKind::ConversionError,
+                            format!("failed to convert {} to float", s),
+                        )
+                    })?;
+                    new_arr.push(Value::Number(
+                        Number::from_f64(f).ok_or_else(|| {
+                            self.err(
+                                JasonErrorKind::ConversionError,
+                                format!("failed to convert {} into serde_json Number", s),
+                            )
+                        })?,
+                    ));
+                }
+                Ok(Some(Value::Array(new_arr)))
+            }
+
+            v => Err(self.err(
+                JasonErrorKind::ConversionError,
+                format!("Cannot convert type {} into float", v),
+            )),
+        }
+    }
+
+
     pub fn eval_float_conversion(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::FloatConverion(args) = &node.token.token_type {
-            let args:Vec<ASTNode> = args.to_nodes()?;
+            let args:&Vec<ASTNode> = args;
 
             let inner_value = args.get(0).ok_or_else(|| 
                 JasonError::new(
@@ -967,44 +1159,8 @@ impl Context {
                     );
                 }
             }
-
-            
-            let result:f64 = match &value {
-                Value::Number(n) => n.as_f64().ok_or_else(||
-                    self.err(
-                            JasonErrorKind::ConversionError, 
-                            format!("failed to convert {} to int", value.clone().to_string()
-                        )
-                    )
-                )?,
-                Value::String(s) => s.parse::<f64>()
-                    .map_err( |_|
-                        self.err(
-                                JasonErrorKind::ConversionError, 
-                                format!("failed to convert {} to int", value.to_string())
-                        )
-                    )?,
-                Value::Bool(b) => if *b {1.0} else {0.0},
-                v => return Err(JasonError::new(
-                    JasonErrorKind::ConversionError, 
-                    self.source_path.clone(), 
-                    self.local_root.clone(), 
-                    format!("Cannot convert type {} into string", v)
-                ))
-            };
-
-            Ok(
-                Some(
-                    Value::Number(
-                        Number::from_f64(result).ok_or_else(|| 
-                            self.err(
-                                JasonErrorKind::ConversionError,
-                                format!("failed to convert random number into serde_json Number")
-                            )
-                        )?
-                    )
-                )
-            )
+ 
+            self.value_to_float(&value)
         }else {
             Err(
                 self.err(JasonErrorKind::Custom, format!("reached string conversion from not string conversion"))
@@ -1012,7 +1168,34 @@ impl Context {
         }
     }
 
-
+    pub fn eval_composite_string(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
+        if let TokenType::CompositeString(strings, nodes) = &node.token.token_type {
+            let mut result = String::new();
+            for (i, string) in strings.iter().enumerate() {
+                result.push_str(string);  
+                if let Some(n) = nodes.get(i) {
+                    let node_result = self.to_json(n)?;
+                    let value_result = match node_result {
+                        Some(res) => self.value_to_string(&res)?,
+                        None => return Err(
+                            self.err(
+                                JasonErrorKind::Custom, 
+                                format!("all values in composite string must return a value")
+                            )
+                        ) 
+                    };
+                    result.push_str(&value_result);
+                }
+            } 
+            return Ok(Some(Value::String(result))); 
+        }
+        Err(
+            self.err(
+                JasonErrorKind::Custom, 
+                format!("reached composite string from token that isn't composite string here: {}", node.plain_sum)
+            )
+        )
+    }
     pub fn to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         match &node.token.token_type {
             TokenType::Null => Ok(Some(serde_json::Value::Null)),
@@ -1025,6 +1208,7 @@ impl Context {
             TokenType::UPick => self.eval_upick(node),
             TokenType::DoubleColon => self.eval_double_colon(node),
             TokenType::StringConverion(_) => self.eval_string_conversion(node),
+            TokenType::CompositeString(_, _) => self.eval_composite_string(node),
             TokenType::IntConverion(_) => self.eval_int_conversion(node),
             TokenType::FloatConverion(_) => self.eval_float_conversion(node),
             TokenType::ID => {
@@ -1039,21 +1223,31 @@ impl Context {
             },
             TokenType::Block(_) => Ok(Some(self.block_to_json(node)?.ok_or_else(||
                 JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(), self.local_root.clone(),"block returned None"))?)),
-            TokenType::NumberLiteral(num) => {
-                let parsed = num.parse::<f64>().map_err(|_|
-                    JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), format!("failed to parse number: {}", num)))?;
-                Ok(Some(serde_json::Value::Number(Number::from_f64(parsed).ok_or_else(||
-                    JasonError::new(JasonErrorKind::ConversionError, self.source_path.clone(), self.local_root.clone(), 
-                        format!("Failed to convert number")))?)))
+            TokenType::IntLiteral(num) => { 
+                Ok(Some(Value::Number(Number::from(*num)))) 
+            },
+            TokenType::FloatLiteral(num) => { 
+                let n = Number::from_f64(*num).ok_or_else(|| {
+                    JasonError::new(
+                        JasonErrorKind::InvalidOperation(num.to_string()),
+                        self.source_path.clone(),
+                        self.local_root.clone(),
+                        "invalid floating-point number",
+                    )
+                })?;
+
+                Ok(Some(Value::Number(Number::from(n)))) 
             },
             TokenType::Equals => self.eval_equal(node),
             TokenType::Narwhal => self.eval_narwhal(node),
             //TokenType::SpiderWalrus => self.eval_spiderwalrus(node),
 
             TokenType::SpiderWalrus => self.eval_spiderwalrus(node),
-            TokenType::StringLiteral(s) => Ok(Some(serde_json::Value::String(s.to_string()))), 
+            TokenType::StringLiteral(s) => {
+                Ok(Some(serde_json::Value::String(s.to_string())))
+            }, 
             TokenType::List(args) => {
-                let json_values: Vec<Value> = args.to_nodes()?
+                let json_values: Vec<Value> = args
                     .iter()
                     .map(|node| {
                         self.to_json(node)?
@@ -1073,7 +1267,7 @@ impl Context {
                     "out statement must have valid jason expression.\n example: out \"Hello!\""))
             },
             TokenType::TemplateDef(args, block) => {
-                let args = args.to_nodes()?;
+                let args = args;
                 if args.len() > 0 {
                     let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
                 
@@ -1107,7 +1301,7 @@ impl Context {
                 }
 
                 let template = self.templates.get(&node.token.plain()).unwrap().clone();
-                template.resolve(self, args.to_vec())
+                template.resolve(self, &args)
             },
             token => {
                 Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
@@ -1139,7 +1333,7 @@ impl Context {
     }
     pub fn block_to_json(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
         if let TokenType::Block(args) = &node.token.token_type {
-            let nodes = args.to_nodes()?;
+            let nodes = args;
             let mut map = Map::new(); // this will become our JSON object
             for node in nodes {
                 if node.token.token_type == TokenType::Colon {
@@ -1183,17 +1377,17 @@ impl Context {
         for arg in &args {
             
             if arg == "$" {
-                for (name, value) in self.variables.clone() {
-                    exported_values.push(ExportType::Variable(name, value));
+                for (name, value) in &self.variables {
+                    exported_values.push(ExportType::Variable(name.clone(), value.clone()));
                 }
-                for (name, value) in self.variable_types.clone() {
-                    exported_values.push(ExportType::VariableType(name, value));
+                for (name, value) in &self.variable_types { 
+                    exported_values.push(ExportType::VariableType(name.clone(), value.clone()));
                 }
                 for (name, value) in self.types.clone() {
-                    exported_values.push(ExportType::Type(name, value));
+                    exported_values.push(ExportType::Type(name.clone(), value.clone()));
                 }
-                for (name, value) in self.template_types.clone() {
-                    exported_values.push(ExportType::TemplateType(name, value));
+                for (name, value) in &self.template_types {
+                    exported_values.push(ExportType::TemplateType(name.clone(), value.clone()));
                 }
                 continue;
             }

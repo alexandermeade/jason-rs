@@ -33,23 +33,28 @@ impl Parser {
         let token = self.current().cloned().unwrap_or(Token::new(TokenType::EOT, "EOT".to_string(), 1, 1));
         
         return match token.token_type {
-            TokenType::ID                 | 
-            TokenType::NumberType         | 
-            TokenType::StringType         |
-            TokenType::BoolType           | 
-            TokenType::AnyType            | 
-            TokenType::NullType           | 
-            TokenType::List(_)            | 
-            TokenType::FnCall(_)          |
-            TokenType::LuaFnCall(_)       |
-            TokenType::Import(_)          |
-            TokenType::StringLiteral(_)   | 
-            TokenType::BoolLiteral(_)     |
-            TokenType::DollarSign         |
-            TokenType::Use(_)             |
-            TokenType::StringConverion(_) | 
-            TokenType::IntConverion(_)    | 
-            TokenType::FloatConverion(_)  | 
+            TokenType::ID                   | 
+            TokenType::FloatLiteral(_)      |
+            TokenType::IntLiteral(_)        |
+            TokenType::NumberType           | 
+            TokenType::IntType              |
+            TokenType::FloatType            |
+            TokenType::StringType           |
+            TokenType::BoolType             | 
+            TokenType::AnyType              | 
+            TokenType::NullType             | 
+            TokenType::List(_)              | 
+            TokenType::FnCall(_)            |
+            TokenType::LuaFnCall(_)         |
+            TokenType::Import(_)            |
+            TokenType::StringLiteral(_)     | 
+            TokenType::CompositeString(_,_) | 
+            TokenType::BoolLiteral(_)       |
+            TokenType::DollarSign           |
+            TokenType::Use(_)               |
+            TokenType::StringConverion(_)   | 
+            TokenType::IntConverion(_)      | 
+            TokenType::FloatConverion(_)    | 
             TokenType::Mult => {
                 self.next();
                 ASTNode::new(token) 

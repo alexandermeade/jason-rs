@@ -4,7 +4,7 @@
 [![Docs](https://docs.rs/jason-rs/badge.svg)](https://docs.rs/jason-rs)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-**jason** is a lightweight JSON templating tool that transforms reusable `.jason` files into standard JSON. Build modular and composable JSON structures with parameter support and file inclusion.
+**jason** build, structure, and reuse data exactly as you expect. 
 
 ## ✨ Features
 
@@ -62,16 +62,21 @@ out Dev("alex", "jason-rs", 0)
 
 ### Types 
 ```jason
+//creates a type for Projects
+//| is the union symbol meaning it can be a String or Null
+//you can union multiple types together
+Project :: String | Null
+
 //creates a type for Developer (similar to a schema)
 Developer :: {
     name: String,
     project: String,
-    money: Number
+    money: Float 
 }
 
 //creates a typing for Dev that expects it to output 
 //the Developer schema
-Dev(String, String, Number) :: Developer 
+Dev(String, Project, Number) :: Developer 
 Dev(name, project, money) {
     name: name,
     project: project,
@@ -79,7 +84,7 @@ Dev(name, project, money) {
 }
 
 //creates a variable with type Developer and assignes it
-alex:Developer = Dev("alex", "jason-rs", 0)
+alex:Developer = Dev("alex", "jason-rs", 0.0)
 
 out alex 
 ```
@@ -88,8 +93,17 @@ Errors with types are pretty clear.
 For example if Dev had incorrect inputs it will emit
 
 ```jason
-Error: Type Error in file ./trans.jason on line 17: expected type String for name found Number in template Dev
-   17 | alex : Developer = Dev(20, "jason-rs", 0)
+Error: Type Error in file ./trans.jason on line 23: Template Dev resulted in {name: String, paul: Number, project: Null} expected {money: Number, name: String, project: String}
+  Missing fields:
+    - money: Number
+
+  Extra fields:
+    + paul: Number
+
+  Type mismatches:
+    ~ project: expected String, found Null
+
+   23 | alex : Developer = Dev("alex", null, 0)
 ```
 
 ## importing
@@ -111,6 +125,55 @@ out Dev("alex", "jason-rs", 0)
 ```
 
 note: this will not import the context around DEV so variables will be ignored unless imported as well. 
+
+## + operator 
+
+Ah! Got it — you want a full written explanation, not a table, and all in one cohesive section suitable for README.md. Here’s a polished version you can paste directly:
+
+## The `+` Operator
+
+The `+` operator in Jason is **overloaded** and behaves differently depending on the types of the operands. It works with **objects**, **arrays**, and **strings**.
+
+### Object Concatenation
+
+When both operands are objects (`{...} + {...}`), the operator **merges them into a single object**. If a key exists in both objects, the **value from the right-hand object overrides** the value from the left-hand object.  
+
+**Examples:**
+
+```jason
+{name: "Alex"} + {age: 20}       // yields {name: "Alex", age: 20}
+{a: 1, b: 2} + {b: 3, c: 4}     // yields {a: 1, b: 3, c: 4}
+
+Array Concatenation
+
+When both operands are arrays ([...] + [...]), the operator joins the two arrays into a single array, with elements from the left-hand array appearing first, followed by elements from the right-hand array.
+
+Examples:
+
+[1, 2, 3] + [4, 5]             // yields [1, 2, 3, 4, 5]
+["a"] + ["b", "c"]             // yields ["a", "b", "c"]
+
+String Concatenation
+
+When both operands are strings ("..." + "..."), the operator joins them into a single string. Jason strings support Unicode, so you can concatenate emoji, symbols, or other characters.
+
+Examples:
+
+"hello" + " world"             // yields "hello world"
+"😀" + "🚀"                      // yields "😀🚀"
+
+
+Side note: Jason supports composite strings, which interpolate variables or expressions inside a string, e.g., "Hello, {name}!". Composite strings can be concatenated with other strings in the same way as regular strings:
+
+name = "Alex"
+$"Hello, {name}!" // "Hello, Alex!"
+
+you can also write full jason valid expressions in Composite strings
+
+$"Hello, {{name: "Alex", age:20}}!" //"Hello, {\"age\":20,\"name\":\"Alex\"}!"
+
+Note:
+You can not concat Composite strings with Composite String or Strings with Composite Strings for consistentcy purposes
 
 ## * operator
 The * operator repeats an expression an integer number of times and then stores it in a list.
@@ -237,7 +300,7 @@ Error: Lua Function Error in file ./main.jason on line 8: failed to find functio
 | `name: T = ...` | Defines a variable name and sets the value to the result of the right hand expression and the Type to the right hand side of the `:` operator|
 | `name(...)` | invokes a template |
 | `out <jason expression>` | when the file gets read from at the top level the value is what gets returned|
-| `String, Number, Bool, Any, Null, [T], {key1: T, key2: U}` | Note: `T` and `U` are types.  `[T]` defines a List of type `T`. `{key1, T, key2: U}` defines an object with two keys where the keys have their own respective types|
+| `String, Int, Float, Number, Bool, Any, Null, [T], {key1: T, key2: U}` | Note: `T` and `U` are types.  `[T]` defines a List of type `T`. `{key1, T, key2: U}` defines an object with two keys where the keys have their own respective types|
 | `Person :: T` | Creates a type alias `Person` of type `T`| 
 | `Person(T, ...) :: U` | Provides a type to a template where the arguments are positional types for the Template and the right hand side is the type of the result| 
 | `import(template, variable, ...) from "path/to/file.jason"` | imports templates and or variables from file |

@@ -4,7 +4,6 @@ use crate::jason_errors::JasonErrorKind;
 use crate::jason_types::JasonType;
 use crate::token;
 use crate::token::Token;
-use crate::token::ArgsToNode;
 use crate::jason_errors;
 use std::collections::HashMap;
 
@@ -21,9 +20,9 @@ impl Template {
         Self { name, arguments, block, typing }
     }
     
-    pub fn resolve(&self, context: &mut Context, arguments: token::Args) -> jason_errors::JasonResult<Option<serde_json::Value>> {
+    pub fn resolve(&self, context: &mut Context, arguments: &token::Args) -> jason_errors::JasonResult<Option<serde_json::Value>> {
         // Parse arguments into proper AST nodes first
-        let parsed_args = arguments.to_nodes()?;
+        let parsed_args = arguments;
         
         // Build map of parameter name -> argument value
         let args: Vec<(String, serde_json::Value)> = self
@@ -80,6 +79,18 @@ impl Template {
 
         if !result_type.matches(&resolved_block) {
             let block_type = context.infer_type_from(&resolved_block)?;
+             
+            match (result_type, &block_type) {
+                (JasonType::Object(o1), JasonType::Object(o2)) => {  
+                    let diff = JasonType::diff_objects(&o1, &o2);
+                    return Err(
+                        context.err(JasonErrorKind::TypeError(block_node.token.plain()), format!("Template {} resulted in {} expected {}{}", self.name, block_type, result_type, diff))
+                    )                    
+                },
+                _ => {}
+            }
+
+           
             return Err(
                 context.err(JasonErrorKind::TypeError(block_node.token.plain()), format!("Template {} resulted in {} expected {}", self.name, block_type, result_type))
             )

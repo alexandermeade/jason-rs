@@ -2,11 +2,12 @@ use crate::token::Token;
 use crate::token::TokenType::*;
 type ChildNode = Option<Box<ASTNode>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ASTNode {
     pub left: ChildNode,
     pub right: ChildNode,
     pub plain_sum: String,
+    pub args: Vec<Vec<Token>>,
     pub parent: ChildNode,
     pub token: Token
 }
@@ -15,11 +16,23 @@ pub struct ASTNode {
 impl ASTNode {
     pub fn new(token: Token) -> Self {
         let plain = token.pretty();
-        ASTNode { left: None, right: None, token, plain_sum: plain, parent: None }
+        ASTNode { left: None, right: None, token, plain_sum: plain, args: Vec::new(), parent: None }
     }
 
+    pub fn pretty_sum(&mut self, args: &Vec<Vec<Token>>) {
+        let mut result = String::new();
+
+        for tokens in args {
+            for token in tokens {
+                result.push_str(&token.pretty());
+            }
+            result.push_str("\n");
+        }
+        self.plain_sum = result;
+    } 
+
     pub fn empty() -> Self {
-        ASTNode {left: None, right:None, token:Token::empty(), plain_sum: String::new(), parent: None}
+        ASTNode {left: None, right:None, token:Token::empty(), plain_sum: String::new(), args: Vec::new(), parent: None}
     }
 
     pub fn parent(&self) -> Option<&ASTNode> {
@@ -57,7 +70,7 @@ impl ASTNode {
 
     pub fn to_code(&self) -> String {
         match &self.token.token_type {
-            StringLiteral(_) | NumberLiteral(_) | BoolLiteral(_) |
+            StringLiteral(_) | IntLiteral(_) | BoolLiteral(_) |
             FloatLiteral(_) | ID | Path(_) => self.token.plain(),
 
             // For binary ops, just show left + token + right if they exist

@@ -1,4 +1,4 @@
-use crate::{jason_errors::JasonError, jason_errors::JasonErrorKind, token::{self, Token, TokenType}};
+use crate::{jason_errors::{JasonError, JasonErrorKind}, token::{self, TokensToNode, Token, TokenType}};
 use crate::jason::CompilerResult;
 use std::rc::Rc;
 
@@ -93,7 +93,117 @@ impl Lexer {
             string_contents
         );
     }
-    
+
+    pub fn lex_composite_string(&mut self) -> Token {
+        self.next(); // skip opening "
+        
+        let row = self.row;
+        let colmn = self.colmn;
+        
+        let mut literals = Vec::new();
+        let mut args = Vec::new();
+        let mut current = String::new();
+        
+        while self.curr_char != '"' {
+            if self.curr_char == '\0' {
+                return self.new_token(
+                    TokenType::ERR(format!("UNABLE TO FIND ENDING \" for composite string at {} {}", row, colmn)),
+                    "COMPOSITE STRING LIT def ERROR no closing \"".to_string(),
+                );
+            }
+            
+            match self.curr_char {
+                '\\' => {
+                    self.next();
+                    if self.curr_char == '\0' {
+                        return self.new_token(
+                            TokenType::ERR(format!("UNEXPECTED END OF FILE after escape in composite string at {} {}", row, colmn)),
+                            "COMPOSITE STRING LIT def ERROR incomplete escape".to_string(),
+                        );
+                    }
+                    current.push(self.curr_char);
+                    self.next();
+                }
+                '{' => {
+                    literals.push(std::mem::take(&mut current));
+                    self.next(); // skip '{'
+                    
+                    let mut expr = Vec::new();
+                    let mut brace_depth = 1;
+                    
+                    while brace_depth > 0 {
+                        if self.curr_char == '\0' {
+                            return self.new_token(
+                                TokenType::ERR(format!("Unclosed '{{' in composite string at {} {}", row, colmn)),
+                                "COMPOSITE STRING LIT def ERROR unclosed brace".to_string(),
+                            );
+                        }
+                        
+                        // Check for raw closing brace BEFORE lexing
+                        if self.curr_char == '}' {
+                            brace_depth -= 1;
+                            if brace_depth == 0 {
+                                self.next(); // consume the closing }
+                                break;
+                            }
+                            // It's a } but not the final one, so lex it
+                            let tok = self.lex();
+                            expr.push(tok);
+                            self.next();
+                            continue;
+                        }
+                        
+                        // Lex the token - this might consume { or create a Block
+                        let tok = self.lex();
+                        
+                        // After lexing, check if we need to adjust depth
+                        // If lex() returned OpenCurly, that means it was a standalone {
+                        // If it returned Block, that means it consumed {...} already
+                        match &tok.token_type {
+                            TokenType::OpenCurly => {
+                                brace_depth += 1;
+                            }
+                            _ => {
+                                // Block and other composite types have already
+                                // consumed their delimiters, no depth change needed
+                            }
+                        }
+                        
+                        expr.push(tok);
+                        self.next();
+                    }
+                    
+                    args.push(expr);
+                    continue;
+                }
+                _ => {
+                    current.push(self.curr_char);
+                    self.next();
+                }
+            }
+        }
+        
+        literals.push(current);
+        
+        let nodes = if args.is_empty() {
+            Vec::new()
+        } else {
+            match args.to_nodes() {
+                Ok(nodes) => nodes,
+                Err(err) => {
+                    return self.new_token(
+                        TokenType::ERR(format!("Failed to build composite string: {}", err)),
+                        format!("{}", err),
+                    )
+                }
+            }
+        };
+        
+        let result = TokenType::CompositeString(literals, nodes);
+        let mut result: Token = self.new_token(result, "".into());
+        result.plain = result.pretty();
+        result
+    }
     pub fn lex_number(&mut self) -> Token {
         let row = self.row;
         let colmn = self.colmn;
@@ -128,15 +238,23 @@ impl Lexer {
         self.back();
         
         let num_str = self.get_substring_by_bytes(start_byte, end_byte);
-        
-        return self.new_token(
-            if is_float {
-                TokenType::NumberLiteral(format!("{}", num_str))
-            } else {
-                TokenType::NumberLiteral(format!("{}", num_str))
-            }, 
-            format!("{}", num_str)
-        );
+    
+        if is_float {
+            match num_str.parse::<f64>() {
+                Ok(res) => return self.new_token(TokenType::FloatLiteral(res), num_str.to_string()),
+                Err(_) => { 
+                    let msg = format!("couldn't convert {} into f64", num_str);
+                    return self.new_token(TokenType::ERR(msg.clone()), msg);
+                }
+            };
+        }
+        match num_str.parse::<i64>() {
+            Ok(res) => return self.new_token(TokenType::IntLiteral(res), num_str.to_string()),
+            Err(_) => { 
+                let msg = format!("couldn't convert {} into f64", num_str);
+                return self.new_token(TokenType::ERR(msg.clone()), msg);
+            }
+        };            
     }
     
     pub fn lex_id(&mut self) -> Token {
@@ -318,7 +436,16 @@ impl Lexer {
                 self.new_token(TokenType::Divide, format!("/"))
             },
             '%' => self.new_token(TokenType::Mod, format!("%")),
-            '$' => self.new_token(TokenType::DollarSign, format!("$")),
+            '$' => {
+                match self.get_direct_next() {
+                    Some('"') => {
+                        self.next();
+                        let tok = self.lex_composite_string();
+                        return tok; 
+                    },
+                    _ => return self.new_token(TokenType::DollarSign, format!("$")),
+                }
+            },
             '"' => self.lex_string(),
             '.' => self.new_token(TokenType::Dot, format!(".")),
             ',' => self.new_token(TokenType::Comma, format!(",")),
@@ -369,18 +496,28 @@ impl Lexer {
                 let args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                     .map(|slice| slice.to_vec())
                     .collect();
-                return self.new_token(TokenType::List(args), format!("List"));
+
+                match args.to_nodes() {
+                    Ok(nodes) => return self.new_token(TokenType::List(nodes), format!("List")),
+                    Err(err) => return self.new_token(TokenType::ERR(err.message.clone()), err.message),
+                }
+
             },
             '{' => {
                 let toks: Vec<Token> = match self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly) {
                     Ok(toks) => toks,
                     Err(e) => return e
                 };
+
                 let mut args: Vec<Vec<Token>> = toks.split(|tok| tok.token_type == TokenType::Comma)
                     .map(|slice| slice.to_vec())
                     .collect();                
+
                 args.retain(|vec| !vec.is_empty());
-                return self.new_token(TokenType::Block(args), format!("Block"));
+                match args.to_nodes() {
+                    Ok(nodes) => return self.new_token(TokenType::Block(nodes), format!("Block")), 
+                    Err(err) => return self.new_token(TokenType::ERR(err.message.clone()), err.message),
+                }
             },
             '|' => self.new_token(TokenType::Bar, format!("|")),
             '<' => {
@@ -396,7 +533,12 @@ impl Lexer {
                     let args: Vec<Vec<Token>> = right_side.split(|tok| tok.token_type == TokenType::Comma)
                         .map(|slice| slice.to_vec())
                         .collect();
-                    return self.new_token(TokenType::Template(sides[0].clone(), args), format!("Template"));
+
+                    match args.to_nodes() {
+                        Ok(nodes) => return self.new_token(TokenType::Template(sides[0].clone(), nodes), format!("Template")), 
+                        Err(err) => return self.new_token(TokenType::ERR(err.message.clone()), err.message),
+                    }
+
                 }
                 return self.new_token(TokenType::Template(sides[0].clone(), vec![]), format!("Template"));
             },
@@ -427,7 +569,11 @@ impl Lexer {
                             self.next();
                             self.skip_whitespace(); 
                             if self.curr_char == '!' {
-                                return self.new_token(TokenType::LuaFnCall(args), format!("{}", id.plain()));                        
+                                match args.to_nodes() {
+                                    Ok(nodes) => return self.new_token(TokenType::LuaFnCall(nodes), format!("{}", id.plain())), 
+                                    Err(err) => return self.new_token(TokenType::ERR(err.message.clone()), err.message),
+                                }
+
                             }
                             if self.curr_char == '{' {
                                 let inner_toks: Vec<Token> = match self.collect_toks_between(TokenType::OpenCurly, TokenType::ClosedCurly) {
@@ -438,10 +584,23 @@ impl Lexer {
                                     .map(|slice| slice.to_vec())
                                     .collect();                                           
                                 inner_args.retain(|vec| !vec.is_empty());
-                                return self.new_token(TokenType::TemplateDef(args, inner_args), format!("{}", id.plain()));                        
+
+                                match (args.to_nodes(), inner_args.to_nodes()) {
+                                    (Ok(nodes), Ok(inner_nodes)) => return self.new_token(TokenType::TemplateDef(nodes, inner_nodes), format!("{}", id.plain())),
+                                    (Ok(_), Err(err)) |
+                                    (Err(err), Ok(_)) => return self.new_token(TokenType::ERR(err.message.clone()), err.message),
+
+                                    (Err(err1), Err(err2)) => return self.new_token(TokenType::ERR(format!("{}\n{}", err1.message, err2.message)), format!("{}\n{}", err1.message, err2.message)),
+                                }
                             }
                             self.back();
-                            return self.new_token(TokenType::FnCall(args), format!("{}", id.plain())).find_fn_keyword();                        
+                            match args.to_nodes() {
+                                Ok(nodes) => return self.new_token(TokenType::FnCall(nodes), format!("{}", id.plain())).find_fn_keyword(), 
+                                Err(err) => return self.new_token(TokenType::ERR(err.message.clone()), err.message),
+                            }
+
+
+                                                   
                         },
                         _ => {}
                     }
@@ -541,10 +700,7 @@ impl Lexer {
                 break;
             }
             lexer.next();
-        }
-        
-                
-                
+        }                
 
         let errs: Vec<JasonError> = lexer
             .tokens

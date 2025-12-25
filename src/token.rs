@@ -2,9 +2,9 @@
 
 use crate::parser::Parser;
 use crate::astnode::ASTNode;
-use crate::jason_errors::JasonError;
+use crate::jason_errors::{JasonError};
 
-pub type Args = Vec<Vec<Token>>;
+pub type Args = Vec<ASTNode>;
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Clone)]
@@ -12,9 +12,10 @@ pub enum TokenType {
     ERR(String),
     Unknown(char),
     StringLiteral(String),
-    NumberLiteral(String),
+    CompositeString(Vec<String>, Vec<ASTNode>),
+    IntLiteral(i64),
     BoolLiteral(bool),
-    FloatLiteral(String),
+    FloatLiteral(f64),
     Import(Args),
     Export(Args),
     FnCall(Args),
@@ -82,6 +83,8 @@ pub enum TokenType {
     Type,
     StringType,
     NumberType,
+    IntType,
+    FloatType,
     BoolType,
     AnyType,
     NullType,
@@ -101,13 +104,13 @@ impl TokenType {
             "as" => TokenType::AS,
             "String" => TokenType::StringType,
             "Number" => TokenType::NumberType,
+            "Int"    => TokenType::IntType,
+            "Float"  => TokenType::FloatType,
             "Bool"   => TokenType::BoolType,
             "Any"    => TokenType::AnyType,
             "Null"   => TokenType::NullType,
             "true" => TokenType::BoolLiteral(true),
             "false" => TokenType::BoolLiteral(false),
-            "const" => TokenType::Const,
-            "type" => TokenType::Type,
             "embed" => TokenType::Embed,
             "return" => TokenType::Return,
             "out" => TokenType::Out,
@@ -116,7 +119,6 @@ impl TokenType {
             "pick" => TokenType::Pick,
             "repeat" => TokenType::Repeat,
             "append" => TokenType::Append,
-            "unpack" => TokenType::Unpack,
             _ => TokenType::ID
         }
     }
@@ -208,7 +210,7 @@ impl TokenType {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Token {
-    plain: String,
+    pub plain: String,
     pub token_type: TokenType,
     pub row: usize,
     pub colmn: usize,
@@ -270,12 +272,37 @@ impl Token {
         }
     }
 
+    pub fn build_composite_string(strings:&Vec<String>, args:&Vec<ASTNode>) -> String {
+        let mut result: String = String::new();
+
+        for (i, string) in strings.iter().enumerate() {
+            
+            let node_str = if i < args.len() {               
+                let node = args.get(i).unwrap(); 
+                &node.plain_sum
+            }else {
+                &String::new() 
+            };
+
+            result.push_str(string);
+            if !node_str.is_empty() {
+                result.push_str("{");
+                result.push_str(&node_str);
+                result.push_str("}");
+            }
+
+        }  
+
+        result
+    }
+
      pub fn pretty(&self) -> String {
         match &self.token_type {
             // ===== Literals =====
-            TokenType::StringLiteral(s) => format!("{:?}", s), // adds quotes
-            TokenType::NumberLiteral(n) => n.clone(),
-            TokenType::FloatLiteral(f) => f.clone(),
+            TokenType::StringLiteral(s) => format!("{:?}", s), // adds quotes                                                   
+            TokenType::CompositeString(s, a) => format!("${:?}", Self::build_composite_string(s, a)), // adds quotes
+            TokenType::IntLiteral(_) => self.plain.clone(),
+            TokenType::FloatLiteral(_) => self.plain.clone(),
             TokenType::BoolLiteral(b) => b.to_string(),
             TokenType::Null => "null".to_string(),
 
@@ -382,6 +409,8 @@ impl Token {
             TokenType::Type       => "type".to_string(),
             TokenType::StringType => "String".to_string(),
             TokenType::NumberType => "Number".to_string(),
+            TokenType::FloatType  => "Float".to_string(),
+            TokenType::IntType    => "Int".to_string(),
             TokenType::BoolType   => "Bool".to_string(),
             TokenType::AnyType    => "Any".to_string(),
             TokenType::NullType   => "Null".to_string(),
@@ -405,11 +434,15 @@ impl Token {
 }
 
 pub trait ArgsToNode {
-    fn to_nodes(&self) -> Result<Vec<ASTNode>, JasonError>;
     fn as_string_list(&self) -> String;
     fn as_string_tuple(&self) -> String;
 }
-impl ArgsToNode for Args {
+
+pub trait TokensToNode {
+    fn to_nodes(&self) -> Result<Vec<ASTNode>, JasonError>;
+}
+
+impl TokensToNode for Vec<Vec<Token>> {
     fn to_nodes(&self) -> Result<Vec<ASTNode>, JasonError> {
         let mut nodes = Vec::new();
 
@@ -427,32 +460,22 @@ impl ArgsToNode for Args {
 
         Ok(nodes)
     }
+}
+
+impl ArgsToNode for Vec<ASTNode> {    
     fn as_string_list(&self) -> String {
         "[".to_string()
             + &self.iter()
-                .map(|tokens| {
-                    tokens
-                        .iter()
-                        .map(|t| t.pretty()) // 🚀 use pretty of raw token
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
+                .map(|node| node.plain_sum.clone())
                 .collect::<Vec<_>>()
                 .join(", ")
             + "]"
     }
-
+    
     fn as_string_tuple(&self) -> String {
         "(".to_string()
-            + &self
-                .iter()
-                .map(|tokens| {
-                    tokens
-                        .iter()
-                        .map(|t| t.pretty()) // 🚀 preserve literal text
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
+            + &self.iter()
+                .map(|node| node.plain_sum.clone())
                 .collect::<Vec<_>>()
                 .join(", ")
             + ")"

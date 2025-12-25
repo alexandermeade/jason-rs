@@ -1,10 +1,13 @@
-# jason-RS
+<p align="center">
+<img width="195" height="75" alt="screenshot(2)" src="https://github.com/user-attachments/assets/7a7ebbee-49f2-40d8-800e-6ff7e8c262e6" />
+</p>
+
 
 [![Crates.io](https://img.shields.io/crates/v/jason-rs)](https://crates.io/crates/jason-rs)
 [![Docs](https://docs.rs/jason-rs/badge.svg)](https://docs.rs/jason-rs)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-**jason** build, structure, and reuse data exactly as you expect. 
+**jason-rs** build, structure, and reuse data exactly as you expect. 
 
 ## ✨ Features
 
@@ -136,7 +139,6 @@ out Dev("alex", "jason-rs", 0)
 note: this will not import the context around DEV so variables will be ignored unless imported as well. 
 note note: To import types from another file use `$` in your import. This will also import all variables over from the other file. (This will become better I swear)
 
-## + operator 
 
 ## The `+` Operator
 
@@ -185,8 +187,8 @@ $"Hello, {{name: "Alex", age:20}}!" //"Hello, {\"age\":20,\"name\":\"Alex\"}!"
 Note:
 You can not concat Composite strings with Composite String or Strings with Composite Strings for consistentcy purposes
 
-## *, repeat, pick, upick operator
-The * operator repeats an expression an integer number of times and then stores it in a list.
+## `*`, `repeat`, `pick`, `upick` operators
+The `*` operator repeats an expression an integer number of times and then stores it in a list.
 
 ```jason
 //this returns ["hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋","hello👋"]
@@ -214,11 +216,9 @@ result = main pick 12
 out result
 ```
 
-# pick/upick
-The `pick` operators return single values instead of list if given only one item to pick.
+- `pick`/`upick` operators return single values instead of `[T]` if given only one item to pick.
 
-# Repeat and *
-When `repeating` or `*` a value by `1` will always return a `[T]`
+-  `Repeat` and `*` when `repeating`/`*` a value by `1` will always return a `[T]`
 
 
 ## JasonBuilder

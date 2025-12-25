@@ -33,10 +33,10 @@ fn main() {
     println!("{}", json);
 }
 ```
-
-##  Example
-
 ### Jason File
+
+`Jason` is a langauge that compiles directly into `JSON`. In the example below we create a variable and then output some values via the `out` keyword
+
 ```jason
 //a variable that holds a value
 project_name = "jason-rs"
@@ -50,6 +50,9 @@ out {
 ```
 
 ### Jason Templates
+
+`Templates` allow you to create Objects in a way that doesn't feel redundant.
+
 ```jason
 Dev(name, project, money) {
     name: name,
@@ -61,6 +64,9 @@ out Dev("alex", "jason-rs", 0)
 ```
 
 ### Types 
+
+`Types` in `Jason` are very easy to use and are completely optional to use. 
+
 ```jason
 //creates a type for Projects
 //| is the union symbol meaning it can be a String or Null
@@ -86,7 +92,10 @@ Dev(name, project, money) {
 //creates a variable with type Developer and assignes it
 alex:Developer = Dev("alex", "jason-rs", 0.0)
 
-out alex 
+//alex2's type is infered from alex and the value is stored
+alex2 := alex
+
+out alex2
 ```
 
 Errors with types are pretty clear.
@@ -125,12 +134,13 @@ out Dev("alex", "jason-rs", 0)
 ```
 
 note: this will not import the context around DEV so variables will be ignored unless imported as well. 
+note note: To import types from another file use `$` in your import. This will also import all variables over from the other file. (This will become better I swear)
 
 ## + operator 
 
 ## The `+` Operator
 
-The `+` operator is **overloaded** and behaves differently depending on the types of the operands. It works with **objects**, **arrays**, and **strings**.
+The `+` operator is **overloaded** and behaves differently depending on the types given to it. It works with **objects**, **arrays**, and **strings**.
 
 ### Object Concatenation
 
@@ -175,7 +185,7 @@ $"Hello, {{name: "Alex", age:20}}!" //"Hello, {\"age\":20,\"name\":\"Alex\"}!"
 Note:
 You can not concat Composite strings with Composite String or Strings with Composite Strings for consistentcy purposes
 
-## * operator
+## *, repeat, pick, upick operator
 The * operator repeats an expression an integer number of times and then stores it in a list.
 
 ```jason
@@ -192,14 +202,24 @@ Person(name, age) {
     name: name,
     age: age
 }
+
 //makes a Person witha random name and int from 0 to 67. 2000 times and stores them into a list
 main = Person(random_name()!, random_int(67)!) * 2000
+
 //pick one value from main 12 times (with repeats)
 //you should use upick for unique elements
-result = main pick 12 
+result = main pick 12
+
 //out the result
 out result
 ```
+
+# pick/upick
+The `pick` operators return single values instead of list if given only one item to pick.
+
+# Repeat and *
+When `repeating` or `*` a value by `1` will always return a `[T]`
+
 
 ## JasonBuilder
 

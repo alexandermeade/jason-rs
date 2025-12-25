@@ -324,7 +324,6 @@ Error: Lua Function Error in file ./main.jason on line 8: failed to find functio
 | `[...] upick 2` | picks two unique values randomly from array!|
 | `[...] map(n) expression` |maps each element from the array on the left (noted as n in this case) with the expression on the right of map|
 | `[...] map(n, i) expression` |evaluates similiar to a normal map but the second argument represents position in array|
-Parses a `.jason` file at the given path and returns a serde_json value object which can then be converted to structs
 
 ##  License
 

@@ -9,6 +9,7 @@ pub enum JasonErrorKind {
     SyntaxError,
     MissingValue,
     MissingKey,
+    CircularImport,
     ValueError,
     TypeError(String),
     FileError,
@@ -21,6 +22,7 @@ pub enum JasonErrorKind {
     ImportError,
     LuaError,
     UndefinedType(String),
+    TemplateRescursion(String),
     UndefinedVariable(String),
     UndefinedTemplate(String),
     LuaFnError(String),
@@ -137,9 +139,12 @@ impl JasonError {
             JasonErrorKind::ValueError => "Value Error",
             JasonErrorKind::TypeError(_) => "Type Error",
             JasonErrorKind::InvalidOperation(_) => "Invalid Operation",
+            JasonErrorKind::TemplateRescursion(_) => "Template Recursion",
             JasonErrorKind::MissingNode => "Missing Node",
             JasonErrorKind::ConversionError => "Conversion Error",
             JasonErrorKind::Custom => "Custom Error",
+
+            JasonErrorKind::CircularImport => "Custom Error",
             JasonErrorKind::ImportError => "Import Error",
             JasonErrorKind::LuaError => "Lua Error",
             JasonErrorKind::Bundle(_) => "Multiple Errors",
@@ -210,6 +215,7 @@ impl std::fmt::Display for JasonError {
                 },
                 JasonErrorKind::TypeError(var)         |
                 JasonErrorKind::UndefinedVariable(var) |
+                JasonErrorKind::TemplateRescursion(var)|
                 JasonErrorKind::UndefinedTemplate(var) => {
                     println!("{:>5}", highlight_string(&code_line, &var));
                 },

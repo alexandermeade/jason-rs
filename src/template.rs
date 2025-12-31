@@ -1,11 +1,14 @@
 use crate::astnode::ASTNode;
 use crate::context::Context;
+use crate::jason_errors::JasonError;
 use crate::jason_errors::JasonErrorKind;
+use crate::jason_errors::JasonResult;
 use crate::jason_types::JasonType;
 use crate::token;
 use crate::token::Token;
 use crate::jason_errors;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Template {
@@ -16,12 +19,17 @@ pub struct Template {
 }
 
 impl Template { 
-    pub fn new(name: String, arguments: Vec<String>, block: token::Args, typing: Option<(Vec<JasonType>, JasonType)>) -> Self {
-        Self { name, arguments, block, typing }
+    pub fn new(context: &Context, name: String, arguments: Vec<String>, block: token::Args, typing: Option<(Vec<JasonType>, JasonType)>) -> JasonResult<Self> {
+        
+        for node in &block {
+            Self::check_self_reference(&context, &node, &node, &name)?;
+        }
+
+        Ok(Self { name, arguments, block, typing })
     }
     
     pub fn resolve(&self, context: &mut Context, arguments: &token::Args) -> jason_errors::JasonResult<Option<serde_json::Value>> {
-        // Parse arguments into proper AST nodes first
+        // Parse arguments into proper AST nodes first 
         let parsed_args = arguments;
         
         // Build map of parameter name -> argument value
@@ -107,4 +115,28 @@ impl Template {
         
         Ok(Some(resolved_block))
     }
+
+
+    pub fn check_self_reference(context: &Context, top_level: &ASTNode, node: &ASTNode, name: &str) -> JasonResult<()> {
+        if let token::TokenType::FnCall(_) = &node.token.token_type {
+            if node.token.plain() == name {
+                return Err(
+                    JasonError::new(
+                        JasonErrorKind::TemplateRescursion(name.to_string()), 
+                        context.source_path.clone(), 
+                        Some(Rc::new(top_level.clone())), 
+                        format!("Self reference found in Template") 
+                    )
+                ); 
+            }
+        }
+        if let Some(left) = &node.left {
+            Self::check_self_reference(context, top_level, left, name)?; 
+        }
+        if let Some(right) = &node.right {
+            Self::check_self_reference(context, top_level, right, name)?;
+        }
+        Ok(())
+    }
+
 }

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::collections::hash_map::HashMap;
-use serde_json::{Value};
+use serde_json::{Number, Value};
 
 use crate::astnode::ASTNode;
 use crate::jason_errors::{JasonError, JasonErrorKind, JasonResult};
@@ -16,6 +16,8 @@ pub enum JasonType {
     Bool,
     Null,
     Any,
+    NumberLiteral(Number),
+    StringLiteral(String),
     Union(Vec<Box<JasonType>>),
     List(Box<JasonType>),
     Object(BTreeMap<String, JasonType>),
@@ -34,6 +36,12 @@ impl Context {
                     )
                 )?.clone()
             ),
+
+            TokenType::FloatLiteral(n) => Ok(JasonType::NumberLiteral(Number::from_f64(*n).ok_or_else(||
+                self.err(JasonErrorKind::ConversionError, format!("failed to covert {} into NumberLiteralType", *n))
+            )?)),
+            TokenType::IntLiteral(n) => Ok(JasonType::NumberLiteral(Number::from(*n))),
+            TokenType::StringLiteral(s) => Ok(JasonType::StringLiteral(s.clone())),
             TokenType::StringType   => Ok(JasonType::String),
             TokenType::IntType      => Ok(JasonType::Int),
             TokenType::FloatType    => Ok(JasonType::Float),
@@ -196,6 +204,29 @@ impl JasonType {
             JasonType::Bool => value.is_boolean(),
             JasonType::Null => value.is_null(),
 
+            JasonType::NumberLiteral(n) => { 
+                if !value.is_number() {
+                    return false;
+                }
+
+                if let Value::Number(num) = value { 
+                    return n.eq(num);    
+                }
+
+                return false;
+            }, 
+
+            JasonType::StringLiteral(s) => {
+                if !value.is_string() {
+                    return false;
+                }
+
+                if let Value::String(value_string) = value {
+                    return s == value_string;
+                }
+                return false;
+            },
+
             JasonType::List(inner) => {
                 if let Value::Array(arr) = value {
                     arr.iter().all(|v| inner.matches(v))
@@ -288,7 +319,8 @@ impl fmt::Display for JasonType {
             JasonType::Bool   => write!(f, "Bool"),
             JasonType::Null   => write!(f, "Null"),
             JasonType::Any    => write!(f, "Any"),
-
+            JasonType::StringLiteral(s) => write!(f, "\"{}\"", s),
+            JasonType::NumberLiteral(n) => write!(f, "\"{}\"", n),
             JasonType::List(inner) => {
                 write!(f, "[{}]", inner)
             }

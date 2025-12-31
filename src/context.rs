@@ -1,8 +1,8 @@
 use crate::{
-    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, jason_types::JasonType, lua_instance::LuaInstance, template::Template, token::{TokenType}
+    astnode::ASTNode, jason_errors::{JasonError, JasonResult}, jason_types::JasonType, lua_instance::LuaInstance, template::Template, token::TokenType
 };
 
-use std::{collections::HashMap};
+use std::collections::{HashMap, HashSet};
 use mlua::Table;
 use rand::Rng;
 use serde_json::{Map, Number, Value};
@@ -34,7 +34,8 @@ pub struct Context {
     pub lua_instance: Rc<RefCell<LuaInstance>>,
     pub lua_env: Table,
     pub lua_fn_cache: HashMap<String, mlua::RegistryKey>, // cache lua functions
-    pub local_root:Option<Rc<ASTNode>>
+    pub local_root:Option<Rc<ASTNode>>,
+    pub imported_from: Rc<RefCell<HashSet<String>>>,
 }
 
 impl Context {    
@@ -63,7 +64,8 @@ impl Context {
             lua_instance,
             lua_env,
             lua_fn_cache: HashMap::new(),
-            local_root: None
+            local_root: None,
+            imported_from: RefCell::new(HashSet::new()).into()
         })
     }
     
@@ -381,7 +383,18 @@ impl Context {
                         return Err(JasonError::new(JasonErrorKind::SyntaxError, self.source_path.clone(), self.local_root.clone(),
                             "to import templates/variable you must import from a string path I.E. import(...) from \"path/to/file\""));
                     }
-                    let context = match jason_hidden::jason_context_from_file(import_path.clone(), self.lua_instance.clone()) {
+                    
+                    if !self.imported_from.borrow_mut().insert(import_path.clone()) {
+                        return Err(self.err(
+                            JasonErrorKind::CircularImport,
+                            format!("found circular import in file {} from {}", import_path, self.source_path)
+                        ));
+                    } 
+
+                    // Pass it to the child context
+                    let context = jason_hidden::jason_context_from_file_with_imports(import_path.clone(), self.lua_instance.clone(), self.imported_from.clone())?;
+
+                    /*let mut context = match jason_hidden::jason_context_from_file(import_path.clone(), self.lua_instance.clone()) {
                         Ok(v) => Ok(v),
                         Err(mut err) => {
                             err.file = self.source_path.clone();
@@ -389,6 +402,10 @@ impl Context {
                             Err(err)
                         },
                     }?;
+
+                    context.imported_from = self.imported_from.clone();
+                    */
+                    
                     let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
                     if args.contains(&"*".to_string()) {
                         let exports = context.export_all();
@@ -1270,27 +1287,30 @@ impl Context {
                 let args = args;
                 if args.len() > 0 {
                     let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
-                
                     self.templates.insert(
                         node.token.plain(), 
                         Template::new(
+                            &self,
                             node.token.plain(), 
                             args, 
                             block.clone(), 
                             self.template_types.get(&node.token.plain()).cloned()
-                        )
+                        )?
                     );
                     return Ok(None);
                 }
+                
+                
 
                 self.templates.insert(
                     node.token.plain(), 
                     Template::new(
+                        &self,
                         node.token.plain(), 
                         Vec::new(), 
                         block.clone(), 
                         self.template_types.get(&node.token.plain()).cloned()
-                    )
+                    )?
                 );
                 return Ok(None);
             },

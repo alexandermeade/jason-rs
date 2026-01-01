@@ -65,6 +65,7 @@ out Dev("alex", "jason-rs", 0)
 //creates a type for Projects
 //| is the union symbol meaning it can be a String or Null
 //you can union multiple types together
+//you can also check against values by typing in a Int/float/string literal
 Project :: String | Null
 
 //creates a type for Developer (similar to a schema)

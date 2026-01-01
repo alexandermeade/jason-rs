@@ -126,17 +126,6 @@ out Dev("alex", "jason-rs", 0)
 
 note: this will not import the context around DEV so variables will be ignored unless imported as well. 
 
-## + operator 
-
-Ah! Got it — you want a full written explanation, not a table, and all in one cohesive section suitable for README.md. Here’s a polished version you can paste directly:
-
-## The `+` Operator
-
-The `+` operator in Jason is **overloaded** and behaves differently depending on the types of the operands. It works with **objects**, **arrays**, and **strings**.
-
-### Object Concatenation
-
-When both operands are objects (`{...} + {...}`), the operator **merges them into a single object**. If a key exists in both objects, the **value from the right-hand object overrides** the value from the left-hand object.  
 
 **Examples:**
 

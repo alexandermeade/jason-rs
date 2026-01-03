@@ -49,6 +49,61 @@ impl Context {
             TokenType::BoolType     => Ok(JasonType::Bool),
             TokenType::AnyType      => Ok(JasonType::Any),
             TokenType::NullType     => Ok(JasonType::Null),
+            TokenType::Plus         => {
+                 let left = node.left.as_ref().ok_or_else(||
+                    self.err(
+                        JasonErrorKind::MissingValue,
+                        format!("missing left side of bar expression")
+                    )
+                )?;
+
+                let right = node.right.as_ref().ok_or_else(||
+                    self.err(
+                        JasonErrorKind::MissingValue,
+                        format!("missing right side of bar expression")
+                    )
+                )?;
+                
+                match (self.to_type(left)?, self.to_type(right)?) {
+                    (JasonType::Object(o1), JasonType::Object(o2)) => {
+                        let mut new_object = o1.clone();
+                        new_object.extend(o2);
+                        Ok(JasonType::Object(new_object))
+                    },
+                    (_,  JasonType::Object(_)) => {
+                        Err(
+                            JasonError::new(
+                                JasonErrorKind::TypeError(left.to_code()),
+                                self.source_path.clone(),
+                                self.local_root.clone(), 
+                                format!("you can only concat types of type Object I.E. {{key: value, ...}}")
+                            )
+                        )
+                    },
+                    (JasonType::Object(_), _) => {
+                        Err(
+                            JasonError::new(
+                                JasonErrorKind::TypeError(right.to_code()),
+                                self.source_path.clone(),
+                                self.local_root.clone(), 
+                                format!("you can only concat types of type Object I.E. {{key: value, ...}}")
+                            )
+                        )
+                    },
+                    _ => {
+                        Err(
+                            JasonError::new(
+                                JasonErrorKind::TypeError("*ALL*".to_string()),
+                                self.source_path.clone(),
+                                self.local_root.clone(), 
+                                format!("you can only concat types of type Object I.E. {{key: value, ...}}")
+                            )
+                        )
+                    }
+                }
+
+            },
+
             TokenType::Bar          => {
                 let left = node.left.as_ref().ok_or_else(||
                     self.err(

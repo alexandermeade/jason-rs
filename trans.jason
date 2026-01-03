@@ -1,31 +1,26 @@
+//creates a type for Projects
+//| is the union symbol meaning it can be a String or Null
+//you can union multiple types together
+Project :: String | Null
 
-
-items = ["sword", "gun", "moonstar", "nokia"]
-stats = ["dmg: 20", "dmg: 12", "dmg: 323", "dmg: 123"]
-
-out items map(item, i) item + ": " + (stats map(s) s + " +" + str(i)) at i
-
-
-//type
-Name :: String
-
-//schema
-Person :: {
-    name: String, 
-    age: Number
+//creates a type for Developer (similar to a schema)
+Developer :: {
+    name: String,
+    project: String,
+    money: Float 
 }
 
-Person(String, Number) :: Person
+//creates a typing for Dev that expects it to output 
+//the Developer schema
+Dev(String, Project, Number) :: Developer 
+Dev(name, project, money) {
+    name: name,
+    project: project,
+    money: money,
+}
 
-out items is String
+//creates a variable with type Developer and assignes it
+alex:Developer = Dev("alex", "jason-rs", 0.0)
 
-//out "{stats}" this is how string templating should work
+out alex 
 
-/*
-names = ["alex", "james", "dill"]
-ages = [20, 42, 15]
-
-
-
-out (names map(n, i) "names " + n + " age: " + str(ages at i)) pick 4 
-*/

@@ -1,0 +1,25 @@
+import(*) from "concept.jason"
+
+Person :: 32 | "Alex" | 12312.341341235 | ({name: String} + {bob: Number})
+
+people: [Person] = ([32, "Alex", 12312.341341235, {name: "dave", bob: 12}] pick 1) * 40
+
+Value :: {value: Float}
+Dev :: {name: String, lang: String}
+
+Programmer :: Dev + Value
+
+Container :: {value: Person}
+Container(value) {
+    value: value 
+}
+
+containers: [Container] = people map(p) Container(p)
+
+programmer: Programmer = {
+    name: "Alex",
+    lang: "Java",
+    value: 3.0,
+}
+
+out containers 

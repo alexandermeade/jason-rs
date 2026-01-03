@@ -1,11 +1,34 @@
-
 Name :: String
+Nickname :: String | Number
 
-age := 12
-
-Person(Name, Number) :: {name: String}
-Person(name, age) {
-    name: name
+Player :: {
+    name     : Name,
+    nickname : Nickname
 }
 
-out Person("Alex", age) 
+Players :: [Player]
+
+names:[String] = ["alex", "dave", "brad", "sam"]
+
+nicknames ::= [String | Number]
+nicknames = ["ace", "xXx", 404, 1337]
+
+Player() :: Player
+Player() {
+    name: names pick 1,
+    nickname: nicknames pick 1
+}
+
+Lobby(players) :: {
+    players : players
+    names: $"{players map(p) p at "name"}\n"
+}
+
+Lobby(players) {
+    players: players
+}
+
+players := Player() * 2000
+
+out Lobby(players)
+

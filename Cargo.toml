@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 jason-rs = { path = "../jason-rs" }
+serde_json = "1.0.148"

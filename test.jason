@@ -1,34 +1,94 @@
-Name :: String
-Nickname :: String | Number
 
-Player :: {
-    name     : Name,
-    nickname : Nickname
+Base :: {
+    server: {
+        http: {
+            host: String,
+            port: Int,
+            headers: {
+                cors: Bool,
+                cache: Bool
+            }
+        },
+        https: {
+            port: Int
+        }
+    },
+    logging: {
+        level: String,
+        format: String
+    }
 }
 
-Players :: [Player]
-
-names:[String] = ["alex", "dave", "brad", "sam"]
-
-nicknames ::= [String | Number]
-nicknames = ["ace", "xXx", 404, 1337]
-
-Player() :: Player
-Player() {
-    name: names pick 1,
-    nickname: nicknames pick 1
+Prod :: {
+    server: {
+        http: {
+            host: String,
+            headers: {
+                cache: Bool
+            }
+        },
+        https: {
+            enabled: Bool
+        }
+    },
+    logging: String
 }
 
-Lobby(players) :: {
-    players : players
-    names: $"{players map(p) p at "name"}\n"
+
+base := {
+    server: {
+        http: {
+            host: "localhost",
+            port: 8080,
+            headers: {
+                cors: true,
+                cache: false
+            }
+        },
+        https: {
+            enabled: false,
+            port: 8443
+        }
+    },
+    logging: {
+        level: "info",
+        format: "json"
+    }
 }
 
-Lobby(players) {
-    players: players
+
+prod:Prod = {
+    server: {
+        http: {
+            host: "prod.example.com",
+            headers: {
+                cache: true
+            }
+        },
+        https: {
+            enabled: true
+        }
+    },
+    logging: "stdout"
 }
 
-players := Player() * 2000
+result: Base & Prod = {
+    logging: {format: "format", level: "level"} , 
+    server: {
+        http: {
+            headers: {
+                cache: false, 
+                cors: true
+            }, 
+        host: "gator", 
+        port: 8000
+        }, 
+        https: {
+            enabled: true,
+            port: 8000
+        }
+    }
+}
 
-out Lobby(players)
+out base & prod
 

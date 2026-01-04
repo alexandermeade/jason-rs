@@ -226,14 +226,15 @@ impl Lexer {
             }
             self.next();
         }
+    
+        let end_byte = self.byte_index;
         
-        if self.byte_index >= self.contents.len() {
+        if start_byte > self.contents.len() || end_byte > self.contents.len() {
             return self.new_token(
-                TokenType::ERR(format!("INCORRECT SET BOUNDS FOR NUMBER/FLOAT LIT DEF at {} {}", row, colmn)), 
-                format!("NUMBER/FLOAT LIT def ERROR incorrect bounds")
+                TokenType::ERR(format!("INCORRECT SET BOUNDS FOR ID at {} {}", row, colmn)), 
+                format!("ID LIT def ERROR incorrect bounds from [{} to {}] during substring", start_byte, end_byte)
             );
         }
-        
         let end_byte = self.byte_index;
         self.back();
         
@@ -276,10 +277,12 @@ impl Lexer {
             self.next();
         }
         
-        if self.byte_index >= self.contents.len() {
+        let end_byte = self.byte_index;
+        
+        if start_byte > self.contents.len() || end_byte > self.contents.len() {
             return self.new_token(
                 TokenType::ERR(format!("INCORRECT SET BOUNDS FOR ID at {} {}", row, colmn)), 
-                format!("ID LIT def ERROR incorrect bounds from [{} to {}] during substring", start_byte, self.byte_index)
+                format!("ID LIT def ERROR incorrect bounds from [{} to {}] during substring", start_byte, end_byte)
             );
         }
         
@@ -446,6 +449,7 @@ impl Lexer {
                     _ => return self.new_token(TokenType::DollarSign, format!("$")),
                 }
             },
+            '&' => self.new_token(TokenType::Merge, format!("&")),
             '"' => self.lex_string(),
             '.' => self.new_token(TokenType::Dot, format!(".")),
             ',' => self.new_token(TokenType::Comma, format!(",")),

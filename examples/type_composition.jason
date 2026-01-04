@@ -1,0 +1,9 @@
+A :: { type : "a", value : Number }
+B :: { type : "b", value : String }
+C :: A + { extra : Bool }
+Result :: A | B | C
+
+r1 : Result = { type : "a", value : 42 }
+r2 : Result = { type : "b", value : "hello" }
+r3 : Result = { type : "a", value : 10, extra : true }
+out [r1, r2, r3]

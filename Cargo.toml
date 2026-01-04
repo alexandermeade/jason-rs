@@ -35,3 +35,5 @@ lua54 = ["mlua/lua54"]
 # LuaJIT backend
 luajit = ["mlua/luajit"]
 
+[profile.test]
+opt-level = 0  # Tests run unoptimized by default

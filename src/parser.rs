@@ -73,7 +73,7 @@ impl Parser {
                 }
                 node
             },
-            TokenType::Plus => {
+            TokenType::Plus  => {
                  return ASTNode::new(Token::new(
                     TokenType::ERR(format!("unexpected '+' found {}", token.plain())),
                     "Parse error".to_string(),
@@ -153,7 +153,7 @@ impl Parser {
         
         while let Some(token) = self.current().cloned() {
             match token.token_type {
-                TokenType::Plus | TokenType::Minus | TokenType::Bar => {
+                TokenType::Plus | TokenType::Minus | TokenType::Bar | TokenType::Merge => {
                     self.next();
                     let right = self.term(); // Right side parses at higher precedence
                     node = ASTNode::new(token)

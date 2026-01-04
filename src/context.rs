@@ -297,7 +297,11 @@ impl Context {
                     return Err(
                         self.err(
                             JasonErrorKind::TypeError(var_name),
-                            format!("type mismatches\n expected {}, found {}", typed_var, infered_type)
+                            format!("type mismatches\n expected {}, found {}\n{}", typed_var, infered_type,
+                                if let (JasonType::Object(o1), JasonType::Object(o2)) = (typed_var, &infered_type) {
+                                    JasonType::diff_objects(&o1, &o2)                                 
+                                } else {"".to_string()}
+                            )
                         )
                     )
                 }
@@ -493,6 +497,51 @@ impl Context {
             "at eval_lua_fn token is not of luafncall"))
     }
     
+
+    pub fn merge(o1: Value, o2: Value) -> JasonResult<Value> {
+        let mut result:Map<String, Value> = Map::new();
+        if let (Value::Object(obj1), Value::Object(obj2)) = (&o1, o2) {
+            for (k, v) in obj1 {
+                // if obj1 doesn't contain a key in obj2 add key to obj 1
+                if !obj2.contains_key(k) {
+                    result.insert(k.clone(), v.clone());
+                }     
+
+                if obj2.contains_key(k) {
+                    result.insert(k.clone(), Self::merge(v.clone(), obj2.get(k).unwrap().clone())?);
+                }
+            }
+            for (k, v) in obj2 {
+                if !obj1.contains_key(&k) {
+                    result.insert(k.clone(), v.clone());
+                }
+            }
+
+        } else {
+            return Ok(o1);
+        }
+        
+        Ok(Value::Object(result))
+    }
+
+    pub fn eval_merge(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
+         let left = self.to_json(node.left.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError, self.source_path.clone(),self.local_root.clone(), "left value is None"))?;
+        let right = self.to_json(node.right.as_ref().ok_or_else(||
+            JasonError::new(JasonErrorKind::MissingValue, self.source_path.clone(),self.local_root.clone(), "right node missing"))?)?.ok_or_else(||
+            JasonError::new(JasonErrorKind::ValueError,self.source_path.clone(), self.local_root.clone(), "right value is None"))?;
+        
+        match (&left, &right) {
+            (Value::Object(_), Value::Object(_)) => {
+                let result = Self::merge(left, right)?;
+                Ok(Some(result))
+            }
+            _ => Err(JasonError::new(JasonErrorKind::InvalidOperation("*ALL*".to_string()), self.source_path.clone(), self.local_root.clone(),
+                format!("invalid + operation for values ", ))),
+        }
+    }
+
     pub fn eval_plus(&mut self, node:&ASTNode) -> JasonResult<Option<serde_json::Value>> {
         let left = self.to_json(node.left.as_ref().ok_or_else(||
             JasonError::new(JasonErrorKind::MissingValue,self.source_path.clone(), self.local_root.clone(), format!("left side of the expression is missing")))?)?.ok_or_else(||
@@ -520,6 +569,7 @@ impl Context {
                 format!("invalid + operation for values ", ))),
         }
     }
+
 
     pub fn eval_at(&mut self, node: &ASTNode) -> JasonResult<Option<serde_json::Value>> {
        let left = self.to_json(node.left.as_ref().ok_or_else(||
@@ -1219,7 +1269,8 @@ impl Context {
             TokenType::Map(_) => self.eval_map(node),
             TokenType::Mult => self.eval_mult(node),
             TokenType::Repeat => self.eval_repeat(node),
-            TokenType::Plus => self.eval_plus(node),
+            TokenType::Plus  => self.eval_plus(node),
+            TokenType::Merge => self.eval_merge(node),
             TokenType::At => self.eval_at(node),
             TokenType::Pick => self.eval_pick(node),
             TokenType::UPick => self.eval_upick(node),

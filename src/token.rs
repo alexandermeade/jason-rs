@@ -93,6 +93,7 @@ pub enum TokenType {
     Empty,
     Null,
     DollarSign,
+    Merge,
 }
 
 impl TokenType {
@@ -366,6 +367,7 @@ impl Token {
             }
 
             // ===== Simple punctuation =====
+            TokenType::Merge         => "&".to_string(),
             TokenType::Bar           => "|".to_string(),
             TokenType::DoubleColon   => "::".to_string(),
             TokenType::Colon         => ":".to_string(),

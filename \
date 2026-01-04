@@ -5,6 +5,7 @@ use crate::astnode::ASTNode;
 use crate::jason_errors::{JasonError, JasonErrorKind, JasonResult};
 use crate::context::Context;
 use crate::token::TokenType;
+use serde_json::Map;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum JasonType {
@@ -37,16 +38,10 @@ impl JasonType {
                     result.insert(k.clone(), Self::merge(v.clone(), obj2.get(k).unwrap().clone())?);
                 }
             }
-
-            for (k, v) in obj2 {
-                if !obj1.contains_key(k) {
-                    result.insert(k.clone(), v.clone());
-                }
-            }
         } else {
             return Ok(JasonType::Union(vec![Box::new(o1), Box::new(o2)]));
         }
-            
+        
         Ok(JasonType::Object(result))
     }
 }
@@ -103,7 +98,7 @@ impl Context {
                 match (&left_type, &right_type) {
                     (JasonType::Object(_), JasonType::Object(_)) => {
                         let result = JasonType::merge(left_type, right_type)?;
-                        Ok(result)
+                        Ok(JasonType::Object(result))
                     },
                     (_,  JasonType::Object(_)) => {
                         Err(
@@ -388,22 +383,9 @@ impl JasonType {
 
             JasonType::Object(map) => {
                 if let Value::Object(obj) = value {
-                    // Check all expected keys exist and match
-                    for (key, jval_type) in map {
-                        match obj.get(key) {
-                            Some(v) if jval_type.matches(v) => {},
-                            Some(_) => return false, // type mismatch
-                            None => return false,    // missing key
-                        }
-                    }
-
-                    for key in obj.keys() {
-                        if !map.contains_key(key) {
-                            return false;
-                        }
-                    }
-
-                    true
+                    map.iter().all(|(key, jval_type)| {
+                        obj.get(key).map_or(false, |v| jval_type.matches(v))
+                    })
                 } else {
                     false
                 }

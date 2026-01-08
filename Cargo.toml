@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+colored = "3.0.0"
 jason-rs = { path = "../jason-rs" }
 serde_json = "1.0.148"

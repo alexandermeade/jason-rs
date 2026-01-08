@@ -1,8 +1,31 @@
 
-Person :: {name: String, age: Int}
-Programmer :: Person + {language: String, project: String}
+A :: {person: {name: String, age: Int}}
+B :: {person: {age: Null, language: String}, country: String}
 
-Dev :: ({name: String, age: Int} )`
+/*
+value := include "trans.jason" 
 
-alex: Dev = {name: "alex"}
-out alex
+Age :: <= -40 while <= -1 | >= 0
+
+age: Age = 0
+
+infoT Age
+infoT C
+
+info value
+
+out value
+*/
+
+
+infoT > 0 while > 100 while > 200 
+infoT >= 0 while >= 100 while >= 200
+
+
+infoT A
+infoT B
+
+infoT A & B 
+infoT A + B 
+
+infoT (A & B) with Null

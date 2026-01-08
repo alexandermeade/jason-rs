@@ -1,6 +1,4 @@
 
-use serde_json;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _json = jason_rs::JasonBuilder::new()
         .include_lua(r#"
@@ -11,6 +9,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .jason_to_json("./testing.jason")?;
         //.jason_to_json("./test.jason")?;
 
-    println!("{:#?}", _json);
+    println!("{}", _json);
     Ok(())
 }

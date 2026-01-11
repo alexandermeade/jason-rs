@@ -1,0 +1,10 @@
+// a variable that holds the value of the project name 
+project_name = "jason-rs"
+
+//what gets exported at the top level
+out {
+    name: "Alex",
+    project: project_name,
+    money: 0,
+}
+

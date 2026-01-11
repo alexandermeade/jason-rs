@@ -1,0 +1,9 @@
+
+Person(name) {
+    name: name
+}
+
+main = Pick(Person(random_name()! * 3))!
+
+out main
+

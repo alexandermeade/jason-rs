@@ -1,0 +1,40 @@
+[package]
+name = "jason-rs"
+version = "0.3.2"
+edition = "2021"
+authors = ["Alexander Meade <thisguys348@gmail.com>"]
+description = "A library for parsing Jason-like files into JSON, YAML, or TOML with support for inline file expansion."
+license = "Apache-2.0"
+repository = "https://github.com/alexandermeade/jason-rs"
+readme = "README.md"
+keywords = ["json", "yaml", "toml", "parser", "config"]
+categories = ["encoding", "parser-implementations"]
+documentation = "https://docs.rs/jason-rs"
+
+[lib]
+name = "jason_rs"
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+serde_json = "1.0"
+include_dir = "0.7.4"
+rand = "0.9.2"
+unicode-width = "0.2.2"
+
+# Base mlua, runtime decided by features
+mlua = { version = "0.10", default-features = false, features = ["serialize"] }
+colored = "3.0.0"
+
+[features]
+# Default runtime = LuaJIT
+default = ["luajit"]
+
+# Standard Lua 5.4 backend
+lua54 = ["mlua/lua54"]
+
+# LuaJIT backend
+luajit = ["mlua/luajit"]
+
+[profile.test]
+opt-level = 0  # Tests run unoptimized by default

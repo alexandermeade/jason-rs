@@ -102,10 +102,11 @@ pub enum TokenType {
     Include,
     Info,
     InfoT,
+    Auto(String)
 }
 
 impl TokenType {
-    
+
     pub fn find_keyword(content:&str) -> TokenType {
         match content {
             "null" => TokenType::Null,
@@ -447,8 +448,9 @@ impl Token {
             TokenType::With       => "with".to_string(),
             TokenType::While      => "while".to_string(),
             TokenType::Info       => "info".to_string(),
-            TokenType::InfoT       => "infoT".to_string(),
-            TokenType::Include    =>  "include".to_string(),
+            TokenType::InfoT      => "infoT".to_string(),
+            TokenType::Include    => "include".to_string(),
+            TokenType::Auto(var)  => format!("*{}", var),
             
             TokenType::DollarSign => "$".to_string(),
 

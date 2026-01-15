@@ -10,6 +10,7 @@ use std::rc::Rc;
 pub struct Parser {
     tokens: Vec<Token>,
     index: usize,
+    file_path: Rc<String>,
 }
 
 impl Parser {
@@ -56,10 +57,32 @@ impl Parser {
             TokenType::Use(_)               |
             TokenType::StringConverion(_)   | 
             TokenType::IntConverion(_)      | 
-            TokenType::FloatConverion(_)    | 
-            TokenType::Mult => {
+            TokenType::FloatConverion(_)    => {
+                let tok = self.current().unwrap().clone();
                 self.next();
-                Ok(ASTNode::new(token)) 
+                return Ok(ASTNode::new(tok))
+            } 
+            TokenType::Mult => {
+                let err_node = match self.current() {
+                    Some(t) => Some(Rc::new(ASTNode::new(t.clone()))),
+                    None => None
+                };
+
+                self.next();
+
+                let right:ASTNode = self.factor()?;
+                if right.token.token_type == TokenType::ID {
+                    return Ok(ASTNode::new(Token::new(TokenType::Auto(right.token.plain()), format!("*{}", right.token.plain()), token.row, token.colmn)))
+                }
+                println!("err_node: {:#?}", err_node);
+                Err(
+                    JasonError::new(
+                        JasonErrorKind::SyntaxErrorHere(if err_node.is_none() {String::new()} else {err_node.as_ref().unwrap().plain_sum.clone()}), 
+                        self.file_path.clone(), 
+                        err_node,
+                        format!("expected an ID after * operator ")
+                    ) 
+                ) 
             },
             TokenType::Out | TokenType::Include | TokenType::Info | TokenType::InfoT => {
                 self.next(); // consume the keyword
@@ -211,7 +234,8 @@ impl Parser {
     pub fn start(file_path: Rc<String>, tokens: Vec<Token>) -> JasonResult<Vec<ASTNode>> {
         let mut parser = Parser {
             tokens,
-            index: 0
+            index: 0,
+            file_path: file_path.clone(),
         };
         let mut nodes: Vec<ASTNode> = Vec::new();
         let mut errs: Vec<ASTNode> = Vec::new();

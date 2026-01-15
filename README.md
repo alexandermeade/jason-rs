@@ -1,3 +1,4 @@
+
 # jason-RS
 
 [![Crates.io](https://img.shields.io/crates/v/jason-rs)](https://crates.io/crates/jason-rs)
@@ -56,6 +57,31 @@ Dev(name, project, money) {
 out Dev("alex", "jason-rs", 0) 
 ```
 
+You can also have implicit fields by doing.
+
+```jason,ignore
+Dev(*name, *project, *money) {}
+```
+
+What this does is create a field with the key name of the given identifier so they compile to the same result. You can also mix it up as well so.
+
+```jason,ignore
+Dev(*name, project, *money) {
+    project: $"{project}-{name}"
+}
+
+out Dev("alex", "skywart", 32000.52) 
+```
+
+is valid and compiles to 
+
+```json, ignore
+{
+    "money": 32000.52,
+    "name":"alex",
+    "project":"skywart-alex"
+}
+```
 ## importing
 
 Dev.jason - A file containing the dev `template`

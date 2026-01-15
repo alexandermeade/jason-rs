@@ -7,6 +7,7 @@ use crate::jason_types::JasonType;
 use crate::token;
 use crate::token::Token;
 use crate::jason_errors;
+use crate::token::TokenType;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -19,18 +20,45 @@ pub struct Template {
 }
 
 impl Template { 
-    pub fn new(context: &Context, name: String, arguments: Vec<String>, block: token::Args, typing: Option<(Vec<JasonType>, JasonType)>) -> JasonResult<Self> {
+    pub fn new(context: &Context, name: String, arguments: token::Args, block: token::Args, typing: Option<(Vec<JasonType>, JasonType)>) -> JasonResult<Self> {
         
         for node in &block {
             Self::check_self_reference(&context, &node, &node, &name)?;
         }
+        
+        let args: Vec<(String, bool, usize, usize)> = arguments
+            .into_iter()
+            .map(|n|
+                match &n.token.token_type {
+                    TokenType::Auto(id) => {
+                        Ok((id.clone(), true, n.token.row, n.token.colmn))
+                    },
+                    TokenType::ID       => {
+                        Ok((n.token.plain(), false, n.token.row, n.token.colmn))
+                    },
+                    _ => {
+                        Err(
+                            JasonError::new(JasonErrorKind::SyntaxErrorHere(n.plain_sum.clone()), context.source_path.clone(), Some(Rc::new(n.clone())), format!("expected either an ID or *ID in Template Def parameters"))
+                        )
+                    }
+                }
+            )
+            .collect::<JasonResult<Vec<(String, bool, usize, usize)>>>()
+            .map_err(|e| e)?;
+        
+        let mut block = block;
 
-        Ok(Self { name, arguments, block, typing })
+        for (key, fill, row, colmn) in &args {
+            if *fill {
+                block.push(Template::build_auto_field(key.clone(), *row, *colmn))
+            }
+        }
+
+        Ok(Self { name, arguments: args.into_iter().map(|t| t.0).collect(), block, typing })
     }
     
     pub fn resolve(&self, context: &mut Context, arguments: &token::Args) -> jason_errors::JasonResult<Option<serde_json::Value>> {
         // Parse arguments into proper AST nodes first 
-        let parsed_args = arguments;
         
         // Build map of parameter name -> argument value
         let args: Vec<(String, serde_json::Value)> = self
@@ -38,14 +66,33 @@ impl Template {
             .iter()
             .cloned()
             .zip(
-                parsed_args
+               arguments 
                     .iter()
                     .map(|node| context.to_json(node))
                     .collect::<jason_errors::JasonResult<Vec<_>>>()?
             )
             .filter_map(|(k, v)| v.map(|val| (k, val)))
             .collect();
-            
+        /*
+        let mut fill_in_args: Vec<String> = Vec::new();
+
+        let mut args: Vec<(String, serde_json::Value)>;
+        
+
+        for (input_args, named_args) in (&arguments, &self.arguments) {
+            match &arg.token.token_type {
+                TokenType::ID => {
+                    
+                },
+                TokenType::Auto(id) => {
+                    
+                },
+                _ => {}
+            }
+        }
+
+*/
+
         // Save original variable state for keys we're overwriting
         let mut old_values:HashMap<String, (serde_json::Value, JasonType)> = HashMap::new();
 
@@ -81,6 +128,7 @@ impl Template {
         let block_node = &ASTNode::new(
             Token::new(token::TokenType::Block(self.block.clone()), "block".to_string(), 1, 1)
         );
+
         let resolved_block = context.to_json(block_node)?.ok_or_else(|| 
             context.err(JasonErrorKind::ValueError, format!("failed to evaluate block"))
         )?;
@@ -137,6 +185,14 @@ impl Template {
             Self::check_self_reference(context, top_level, right, name)?;
         }
         Ok(())
+    }
+
+    pub fn build_auto_field(key: String, row: usize, colmn: usize) -> ASTNode {
+        ASTNode::new(Token::new(TokenType::Colon, format!(":"), row, colmn))
+            .children(
+                Some(Box::new(ASTNode::new(Token::new(TokenType::ID, key.clone(), row, colmn)))),  
+                Some(Box::new(ASTNode::new(Token::new(TokenType::ID, key.clone(), row, colmn)))), 
+            )       
     }
 
 }

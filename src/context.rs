@@ -1676,13 +1676,13 @@ impl Context {
             TokenType::TemplateDef(args, block) => {
                 let args = args;
                 if args.len() > 0 {
-                    let args:Vec<String> = args.into_iter().map(|node| node.token.plain()).collect();
                     self.templates.insert(
                         node.token.plain(), 
                         Template::new(
                             &self,
-                            node.token.plain(), 
-                            args, 
+                            node.token.plain(),
+                            //fix these clones xd
+                            args.clone(), 
                             block.clone(), 
                             self.template_types.get(&node.token.plain()).cloned()
                         )?

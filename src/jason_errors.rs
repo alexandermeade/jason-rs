@@ -8,6 +8,7 @@ use unicode_width::UnicodeWidthChar;
 pub enum JasonErrorKind {
     ParseError(String),
     SyntaxError,
+    SyntaxErrorHere(String),
     MissingValue,
     MissingKey,
     CircularImport,
@@ -161,6 +162,8 @@ impl JasonError {
             JasonErrorKind::LuaFnError(_) => "Lua Function Error",
             JasonErrorKind::IndexError => "Indexing Error",
             JasonErrorKind::IntervalError(_) => "IntervalError",
+
+            JasonErrorKind::SyntaxErrorHere(_) => "SyntaxErrorHere",
         }
     }
 }
@@ -221,6 +224,7 @@ impl std::fmt::Display for JasonError {
                 JasonErrorKind::TypeError(var)         |
                 JasonErrorKind::UndefinedVariable(var) |
                 JasonErrorKind::TemplateRescursion(var)|
+                JasonErrorKind::SyntaxErrorHere(var)   |
                 JasonErrorKind::UndefinedTemplate(var) => {
                     println!("{:>5}", highlight_string(&code_line, &var));
                 },

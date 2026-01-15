@@ -1,6 +1,6 @@
 [package]
 name = "jason-rs"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 authors = ["Alexander Meade <thisguys348@gmail.com>"]
 description = "A library for parsing Jason-like files into JSON, YAML, or TOML with support for inline file expansion."

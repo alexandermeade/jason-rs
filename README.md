@@ -5,6 +5,12 @@
 [![Docs](https://docs.rs/jason-rs/badge.svg)](https://docs.rs/jason-rs)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
+
+
+<p align="center">
+    <img width="231" height="254" alt="Jason" src="https://github.com/user-attachments/assets/c2e3ab21-732e-4cfe-81be-b8831d3bd06e" />
+</p>
+
 Jason builds, structures, and reuses data exactly as you expect.
 
 # ✨ Features

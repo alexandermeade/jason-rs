@@ -7,14 +7,14 @@
 
 Jason builds, structures, and reuses data exactly as you expect.
 
-# ✨ Features
+# Features
 
 * Template Parameters - Define reusable templates with named parameters
 * File Inclusion - Compose JSON from multiple `.jason` files
 * 1:1 Conversion - Clean mapping from .jason syntax to standard JSON
 * Library-First - Designed for seamless integration into Rust projects
 
-## 🚀 Quick Start
+## Quick Start
 
 Add jason-rs to your Cargo.toml:
 
